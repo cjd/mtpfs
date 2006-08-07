@@ -1,0 +1,18 @@
+What's new in 0.3
+-----------------
+* Mp3 song lengths set correctly when uploading
+* Locking on device access so copying multiple files work
+* Playlist reading and writing
+
+
+What's new in 0.2
+-----------------
+
+* Working configure
+* Writing mp3 files to device
+
+What's new in 0.1
+-----------------
+
+* Initial release
+* Can browse the MTP device and read files from it

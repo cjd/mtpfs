@@ -1,0 +1,39 @@
+MTPFS
+--------
+
+MTPFS is a FUSE filesystem based on libmtp that allows a mtp device
+to be browsed as if it were a normal external harddisk
+
+Requirements
+------------
+
+FUSE >= 2.2
+GLib >= 2.6
+libmtp >= 0.0.9
+
+How to mount a filesystem
+-------------------------
+
+To mount a device run:
+
+  mtpfs <mount_point>
+
+To unmount do:
+
+  fusermount -u <mount_point>
+
+Note that you may need to be root to do all this if permissions on the
+MTP device are not correct
+
+Debugging
+---------
+To enable debugging info use the --enable-debug option when running ./configure
+
+Acknowledgements
+----------------
+This wouldn't be possible without libmtp, libusb and fuse.
+Sections of code (in id3read.c and mp3file.c) blatently ripped from gnomad
+
+Contact info
+------------
+Chris Debenham <chris@adebenham.com>
