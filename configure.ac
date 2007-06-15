@@ -1,4 +1,4 @@
-AC_INIT([MTPfs], [0.3], [Chris Debenham <chris@adebenham.com>],[mtpfs])
+AC_INIT([MTPfs], [0.6], [Chris Debenham <chris@adebenham.com>],[mtpfs])
 AM_INIT_AUTOMAKE
 AC_PROG_CC
 AC_PROG_INSTALL

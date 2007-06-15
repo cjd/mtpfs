@@ -1,3 +1,16 @@
+What's new in 0.6
+-----------------
+* Return device size/free
+
+What's new in 0.5
+-----------------
+* Fix configure scripts
+
+What's new in 0.4
+-----------------
+* Fix file permissions so they show uid/gid correctly
+* Update for newer versions of libmtp
+
 What's new in 0.3
 -----------------
 * Mp3 song lengths set correctly when uploading

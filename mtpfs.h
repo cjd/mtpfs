@@ -25,6 +25,7 @@
 #include <id3tag.h>
 #include <mad.h>
 #include <sys/mman.h>
+#include <strings.h>
 #include "id3read.h"
 
 /* Function declarations */
@@ -47,6 +48,8 @@ static int mtpfs_write (const gchar * path, const gchar * buf, size_t size, off_
 static int mtpfs_unlink (const gchar * path);
 static int mtpfs_mkdir (const char *path, mode_t mode);
 static int mtpfs_rmdir (const char *path);
+static int mtpfs_statfs (const char *path, struct statfs *stbuf);
+
 
 static LIBMTP_mtpdevice_t *device;
 static LIBMTP_folder_t *folders = NULL;

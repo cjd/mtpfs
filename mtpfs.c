@@ -8,6 +8,29 @@
 
 #include <mtpfs.h>
 
+
+void
+free_files(LIBMTP_file_t *filelist)
+{
+    LIBMTP_file_t *file = filelist, *tmp;
+    while (file) {
+        tmp = file;
+        file = file->next;
+        LIBMTP_destroy_file_t(tmp);
+    }
+}
+
+void
+free_playlists(LIBMTP_playlist_t *pl)
+{
+    LIBMTP_playlist_t *playlist = pl, *tmp;
+    while (playlist) {
+        tmp = playlist;
+        playlist = playlist->next;
+        LIBMTP_destroy_playlist_t(tmp);
+    }
+}
+
 void
 check_files ()
 {
@@ -15,7 +38,8 @@ check_files ()
         if (DEBUG) g_debug("Refreshing Filelist");
         LIBMTP_file_t *newfiles = NULL;
         g_mutex_lock(device_lock);
-        newfiles = LIBMTP_Get_Filelisting(device);
+        if (files) free_files(files);
+        newfiles = LIBMTP_Get_Filelisting_With_Callback(device, NULL, NULL);
         files = newfiles;
         newfiles = NULL;
         files_changed = FALSE;
@@ -30,6 +54,9 @@ check_folders ()
         if (DEBUG) g_debug("Refreshing Folderlist");
         LIBMTP_folder_t *newfolders = NULL;
         g_mutex_lock(device_lock);
+        if (folders) {
+            LIBMTP_destroy_folder_t(folders);
+        }
         newfolders = LIBMTP_Get_Folder_List(device);
         folders = newfolders;
         newfolders = NULL;
@@ -45,6 +72,7 @@ check_playlists ()
         if (DEBUG) g_debug("Refreshing Playlists");
         LIBMTP_playlist_t *newplaylists;
         g_mutex_lock(device_lock);
+        if (playlists) free_playlists(playlists);
         newplaylists = LIBMTP_Get_Playlist_List(device);
         playlists = newplaylists;
         playlists_changed = FALSE;
@@ -428,6 +456,9 @@ void
 mtpfs_destroy ()
 {
     if (DEBUG) g_debug ("destroy");
+    if (files) free_files(files);
+    if (folders) LIBMTP_destroy_folder_t(folders);
+    if (playlists) free_playlists(playlists);
     LIBMTP_Release_Device (device);
 }
 
@@ -522,6 +553,12 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
 
     int ret = 0;
     memset (stbuf, 0, sizeof (struct stat));
+
+    // Set uid/gid of file
+    struct fuse_context *fc;
+    fc = fuse_get_context();
+    stbuf->st_uid = fc->uid;
+    stbuf->st_gid = fc->gid;
 
     // Check cached files first
     GSList *item;
@@ -784,7 +821,7 @@ mtpfs_mkdir (const char *path, mode_t mode)
     int item_id = parse_path (path);
     if ((item == NULL) && (item_id < 0)) {
         // Split path and find parent_id
-        gchar *filename;
+        gchar *filename="";
         gchar **fields;
         gchar *directory;
         directory = (gchar *) g_malloc (strlen (path));
@@ -844,6 +881,57 @@ mtpfs_rmdir (const char *path)
     return ret;
 }
 
+/* Not working. need some way in libmtp to rename objects
+int
+mtpfs_rename (const char *oldname, const char *newname)
+{
+    uint32_t old_id = parse_path(oldname);
+    LIBMTP_track_t *track;
+    track = LIBMTP_Get_Trackmetadata(device,old_id);
+    gchar *filename;
+    gchar **fields;
+    gchar *directory;
+    directory = (gchar *) g_malloc (strlen (newname));
+    directory = strcpy (directory, "/");
+    fields = g_strsplit (newname, "/", -1);
+    int i;
+    uint32_t parent_id = 0;
+    for (i = 0; fields[i] != NULL; i++) {
+        if (strlen (fields[i]) > 0) {
+            if (fields[i + 1] == NULL) {
+                directory = g_strndup (directory, strlen (directory) - 1);
+                parent_id = lookup_folder_id (folders, directory, "");
+                if (parent_id < 0)
+                    parent_id = 0;
+                filename = g_strdup (fields[i]);
+            } else {
+                directory = strcat (directory, fields[i]);
+                directory = strcat (directory, "/");
+
+            }
+        }
+    }
+    if (DEBUG) g_debug ("%s:%s:%d", filename, directory, parent_id);
+
+    track->parent_id = parent_id;
+    track->title = g_strdup(filename);
+    int ret = LIBMTP_Update_Track_Metadata(device, track);
+    return ret;
+}
+*/
+
+static int
+mtpfs_statfs (const char *path, struct statfs *stbuf)
+{
+    if (DEBUG) g_debug ("mtpfs_statfs");
+    stbuf->f_bsize=1024;
+    stbuf->f_blocks=device->storage->MaxCapacity/1024;
+    stbuf->f_bfree=device->storage->FreeSpaceInBytes/1024;
+    stbuf->f_ffree=device->storage->FreeSpaceInObjects/1024;
+    stbuf->f_bavail=stbuf->f_bfree;
+    return 0;
+}
+
 void *
 mtpfs_init ()
 {
@@ -880,6 +968,8 @@ static struct fuse_operations mtpfs_oper = {
     .destroy = mtpfs_destroy,
     .mkdir   = mtpfs_mkdir,
     .rmdir   = mtpfs_rmdir,
+/*    .rename  = mtpfs_rename,*/
+    .statfs  = mtpfs_statfs,
     .init    = mtpfs_init,
 };
 
