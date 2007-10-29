@@ -1,8 +1,6 @@
 #ifndef ID3HEADER_INCLUDED
 #define ID3HEADER_INCLUDED
 
-void remove_tag_from_mp3file(gchar *path);
-void set_tag_for_mp3file  (int fd, const LIBMTP_track_t *trackdata, int override);
 gchar * getArtist (struct id3_tag *tag);
 gchar * getAlbum(struct id3_tag *tag);
 gchar * getYear(struct id3_tag *tag);

@@ -49,18 +49,17 @@ static int mtpfs_unlink (const gchar * path);
 static int mtpfs_mkdir (const char *path, mode_t mode);
 static int mtpfs_rmdir (const char *path);
 static int mtpfs_statfs (const char *path, struct statfs *stbuf);
+int calc_length(int f);
 
 
 static LIBMTP_mtpdevice_t *device;
 static LIBMTP_folder_t *folders = NULL;
 static LIBMTP_file_t *files = NULL;
 static LIBMTP_playlist_t *playlists = NULL;
-static gchar *basedir = "/tmp/mtpfs-";
 static GSList *myfiles = NULL;
 static gboolean files_changed = FALSE;
 static gboolean folders_changed = FALSE;
 static gboolean playlists_changed = FALSE;
-static gboolean refreshing_files = FALSE;
 static GMutex *device_lock = NULL;
 
 #endif /* _MTPFS_H_ */

@@ -90,7 +90,6 @@ save_playlist (const char *path, struct fuse_file_info *fi)
     FILE *file = NULL;
     char item_path[1024];
     uint32_t item_id=0;
-    int no_tracks=0;
     uint32_t *tracks;
     gchar **fields;
     GSList *tmplist=NULL;
@@ -266,7 +265,6 @@ parse_path (const gchar * path)
     LIBMTP_folder_t *folder;
     gchar **fields;
     gchar *directory;
-    gchar *file;
     directory = (gchar *) g_malloc (strlen (path));
     directory = strcpy (directory, "");
     fields = g_strsplit (path, "/", -1);
@@ -283,7 +281,7 @@ parse_path (const gchar * path)
                     folder_id = lookup_folder_id (folder, directory, "");
                 }
                 if (DEBUG) g_debug ("parent id:%d:%s", folder_id, directory);
-                LIBMTP_file_t *file, *tmp;
+                LIBMTP_file_t *file;
                 check_files();
                 file = files;
                 while (file != NULL) {
@@ -325,7 +323,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             return 0;
         } else {
             //find parent id
-            gchar *filename;
+            gchar *filename = "";
             gchar **fields;
             gchar *directory;
             directory = (gchar *) g_malloc (strlen (path));
@@ -384,7 +382,6 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 if (songlen > 0) {
                     genfile->duration = songlen * 1000;
                 } else {
-                    int fd;
                     genfile->duration = (uint16_t)calc_length(fi->fh) * 1000;
                     //genfile->duration = 293000;
                 }
@@ -702,7 +699,7 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
             playlist = playlists;
             while (playlist != NULL) {
                 if (strcasecmp(playlist->name,name) == 0 ) {
-                    int playlist_id=playlist->playlist_id;
+                    //int playlist_id=playlist->playlist_id;
                     int i;
                     for (i=0; i <playlist->no_tracks; i++){
                         LIBMTP_file_t *file;
@@ -759,7 +756,6 @@ mtpfs_read (const gchar * path, gchar * buf, size_t size, off_t offset,
             struct fuse_file_info *fi)
 {
     if (DEBUG) g_debug ("read");
-    int fd;
     int ret;
 
     int item_id = -1;
@@ -954,6 +950,7 @@ mtpfs_init ()
     //if (DEBUG) g_debug ("Get Playlists");
     //playlists = LIBMTP_Get_Playlist_List(device);
     if (DEBUG) g_debug ("Ready");
+    return 0;
 }
 
 static struct fuse_operations mtpfs_oper = {
@@ -1094,6 +1091,7 @@ int scan(void const *ptr, ssize_t len)
     struct mad_stream stream;
     struct mad_header header;
     struct xing xing;
+    xing.frames=0;
     g_debug("scan: %d",len);
 
 
@@ -1176,7 +1174,7 @@ int scan(void const *ptr, ssize_t len)
     if (!is_vbr)
     {
         double time = (len * 8.0) / (header.bitrate); /* time in seconds */
-        double timefrac = (double)time - ((long)(time));
+        //double timefrac = (double)time - ((long)(time));
         long nsamples = 32 * MAD_NSBSAMPLES(&header); /* samples per frame */
 
         /* samplerate is a constant */
