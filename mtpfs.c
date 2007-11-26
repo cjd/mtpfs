@@ -44,7 +44,42 @@ check_files ()
         newfiles = NULL;
         files_changed = FALSE;
         g_mutex_unlock(device_lock);
+		check_lost_files ();
+        if (DEBUG) g_debug("Refreshing Filelist exiting");
     }
+}
+
+static void
+check_lost_files ()
+{
+	int last_parent_id = -1;
+	gboolean last_parent_found = FALSE;
+	LIBMTP_file_t *item;
+
+	if (lostfiles != NULL)
+		g_slist_free (lostfiles);
+
+	lostfiles = NULL;
+	for (item = files; item != NULL; item = item->next) {
+		gboolean parent_found;
+
+		if (last_parent_id == -1 || last_parent_id != item->parent_id) {
+			if (item->parent_id == 0 || LIBMTP_Find_Folder (folders, item->parent_id) != NULL) {
+				parent_found = TRUE;
+			} else {
+				parent_found = FALSE;
+			}
+			last_parent_id = item->parent_id;
+			last_parent_found = parent_found;
+		} else {
+			parent_found = last_parent_found;
+		}
+		if (DEBUG) g_debug("MTPFS checking for lost files %s, parent %d - %s", item->filename, last_parent_id, ( parent_found ? "FALSE" : "TRUE" ) );
+		if (parent_found == FALSE) {
+			lostfiles = g_slist_append (lostfiles, item);
+		}
+	}
+	if (DEBUG) g_debug("MTPFS checking for lost files exit found %d lost tracks", g_slist_length (lostfiles) );
 }
 
 void
@@ -238,6 +273,7 @@ static int
 parse_path (const gchar * path)
 {
     if (DEBUG) g_debug ("parse_path:%s",path);
+    int res;
     int item_id = -1;
     int i;
     // Check cached files first
@@ -249,18 +285,42 @@ parse_path (const gchar * path)
     // Check Playlists
     if (strncmp("/Playlists",path,10) == 0) {
         LIBMTP_playlist_t *playlist;
+
+		res = -ENOENT;
         check_playlists();
         playlist=playlists;
         while (playlist != NULL) {
             gchar *tmppath;
             tmppath = g_strconcat("/Playlists/",playlist->name,".m3u",NULL);
-            if (g_strcasecmp(path,tmppath) == 0)
-                return playlist->playlist_id;
+            if (g_strcasecmp(path,tmppath) == 0) {
+                res = playlist->playlist_id;
+				g_free (tmppath);
+				break;
+			}
+			g_free (tmppath);
             playlist = playlist->next;
         }
-        return -ENOENT;
-
+        return res;
     }
+
+    // Check lost+found
+    if (strncmp("/lost+found", path, 11) == 0) {
+		GSList *item;
+		gchar *filename  = g_path_get_basename (path);
+
+		res = -ENOENT;
+		for (item = lostfiles; item != NULL; item = g_slist_next (item) ) {
+			LIBMTP_file_t *file = (LIBMTP_file_t *) item->data;
+
+			if (strcmp( file->filename, filename) == 0) {
+				res = file->item_id;
+				break;
+			}
+		}
+		g_free (filename);
+		return res;
+    }
+
     // Check device
     LIBMTP_folder_t *folder;
     gchar **fields;
@@ -268,6 +328,7 @@ parse_path (const gchar * path)
     directory = (gchar *) g_malloc (strlen (path));
     directory = strcpy (directory, "");
     fields = g_strsplit (path, "/", -1);
+    res = -ENOENT;
     for (i = 0; fields[i] != NULL; i++) {
         if (strlen (fields[i]) > 0) {
             if (fields[i + 1] != NULL) {
@@ -286,9 +347,11 @@ parse_path (const gchar * path)
                 file = files;
                 while (file != NULL) {
                     if (file->parent_id == folder_id) {
-                        if (strcasecmp (file->filename, fields[i]) == 0) {
-                            if (DEBUG) g_debug ("found:%d:%s", file->item_id,
-                                     file->filename);
+						if (DEBUG && file->filename == NULL) g_debug ("MTPFS filename NULL");
+
+                        if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
+                            if (DEBUG) g_debug ("found:%d:%s", file->item_id, file->filename);
+
                             item_id = file->item_id;
                             return item_id;
                         }
@@ -298,12 +361,15 @@ parse_path (const gchar * path)
                 if (item_id < 0) {
                     directory = strcat (directory, fields[i]);
                     item_id = lookup_folder_id (folder, directory, "");
-                    return item_id;
+                    res = item_id;
+					break;
                 }
             }
         }
     }
-    return -ENOENT;
+    g_strfreev (fields);
+    if (DEBUG) g_debug ("parse_path exiting:%s",path);
+    return res;
 }
 
 static int
@@ -412,11 +478,12 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 g_mutex_lock(device_lock);
                 ret =
                     LIBMTP_Send_Track_From_File_Descriptor (device, fi->fh,
-                                                            genfile, NULL, NULL,
-                                                            parent_id);
+						genfile, NULL, NULL,
+						parent_id);
                 g_mutex_unlock(device_lock);
                 id3_file_close (id3_fh);
                 LIBMTP_destroy_track_t (genfile);
+                if (DEBUG) g_debug ("Sent TRACK %s",path);
             } else {
                 LIBMTP_file_t *genfile;
                 genfile = LIBMTP_new_file_t ();
@@ -428,10 +495,11 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 g_mutex_lock(device_lock);
                 ret =
                     LIBMTP_Send_File_From_File_Descriptor (device, fi->fh,
-                                                        genfile, NULL, NULL,
-                                                        parent_id);
+						genfile, NULL, NULL,
+						parent_id);
                 g_mutex_unlock(device_lock);
                 LIBMTP_destroy_file_t (genfile);
+                if (DEBUG) g_debug ("Sent FILE %s",path);
             }
             if (ret == 0)
                 if (DEBUG) g_debug ("Sent %s",path);
@@ -463,7 +531,7 @@ static int
 mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
                off_t offset, struct fuse_file_info *fi)
 {
-    if (DEBUG) g_debug ("readdir");
+	if (DEBUG) g_debug ("readdir %s", path);
     LIBMTP_folder_t *folder;
 
     // Add common entries
@@ -490,6 +558,25 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         }
         return 0;
     }
+
+    // Are we looking at lost+found dir?
+    if (strncmp (path, "/lost+found",11) == 0) {
+		check_files ();
+		GSList *item;
+
+		for (item = lostfiles; item != NULL; item = g_slist_next (item) ) {
+			LIBMTP_file_t *file = (LIBMTP_file_t *) item->data;
+
+			struct stat st;
+			memset (&st, 0, sizeof (st));
+			st.st_ino = file->item_id;
+			st.st_mode = S_IFREG | 0444;
+			if (filler (buf, (file->filename == NULL ? "<mtpfs null>" : file->filename), &st, 0))
+				break;
+		}
+		return 0;
+    }
+
     // Get folder listing.
     int folder_id = 0;
     if (strcmp (path, "/") != 0) {
@@ -502,6 +589,10 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         filler (buf, "Playlists", NULL, 0);
         check_folders();
         folder = folders;
+		/* lost+found */
+		if (lostfiles != NULL) {
+			filler (buf, "lost+found", NULL, 0);
+		}
     } else {
         g_mutex_lock(device_lock);
         check_folders();
@@ -510,8 +601,10 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         folder = folder->child;
     }
 
+    if (DEBUG) g_debug("Checking folders");
     while (folder != NULL) {
         if (folder->parent_id == folder_id) {
+			if (DEBUG) g_debug("found folder: %s, id %d", folder->name, folder->folder_id);
             struct stat st;
             memset (&st, 0, sizeof (st));
             st.st_ino = folder->folder_id;
@@ -521,8 +614,9 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         }
         folder = folder->sibling;
     }
+    if (DEBUG) g_debug("Checking folders end");
     LIBMTP_destroy_folder_t (folder);
-
+    if (DEBUG) g_debug("Checking files");
     // Find files
     LIBMTP_file_t *file, *tmp;
     check_files();
@@ -533,20 +627,20 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
             memset (&st, 0, sizeof (st));
             st.st_ino = file->item_id;
             st.st_mode = S_IFREG | 0444;
-            if (filler (buf, file->filename, &st, 0))
+            if (filler (buf, (file->filename == NULL ? "<mtpfs null>" : file->filename), &st, 0))
                 break;
         }
         tmp = file;
         file = file->next;
     }
-
+    if (DEBUG) g_debug("readdir exit");
     return 0;
 }
 
 static int
 mtpfs_getattr (const gchar * path, struct stat *stbuf)
 {
-    if (DEBUG) g_debug ("getattr");
+	if (DEBUG) g_debug ("getattr %s", path);
 
     int ret = 0;
     memset (stbuf, 0, sizeof (struct stat));
@@ -569,13 +663,16 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
         }
     }
 
-    // Special case directory 'Playlists'
-    if (strcasecmp (path, "/Playlists") == 0) {
+    // Special case directory 'Playlists', 'lost+found'
+    if (path != NULL && (strcasecmp (path, "/Playlists") == 0 || 
+			strcasecmp (path, "/lost+found") == 0)) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
         return 0;
     }
-    if (strncasecmp (path, "/Playlists",10) == 0) {
+
+
+    if (path != NULL && strncasecmp (path, "/Playlists",10) == 0) {
         LIBMTP_playlist_t *playlist;
         check_playlists();
         playlist=playlists;
@@ -610,7 +707,27 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
         return -ENOENT;
     }
 
-    if (strcmp (path, "/") == 0) {
+    if (path != NULL && strncasecmp (path, "/lost+found",11) == 0) {
+		GSList *item;
+		int item_id = parse_path (path);
+		for (item = lostfiles; item != NULL; item = g_slist_next (item)) {
+			LIBMTP_file_t *file = (LIBMTP_file_t *) item->data;
+	
+			if (item_id == file->item_id) {
+				stbuf->st_ino = item_id;
+				stbuf->st_size = file->filesize;
+				stbuf->st_blocks = (file->filesize / 512) +
+					(file->filesize % 512 > 0 ? 1 : 0);
+				stbuf->st_nlink = 1;
+				stbuf->st_mode = S_IFREG | 0777;
+				return 0;
+			}
+		}
+
+		return -ENOENT;
+    }
+
+    if (path != NULL && strcmp (path, "/") == 0) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
     } else {
@@ -648,17 +765,16 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
         }
     }
 
+    if (DEBUG) g_debug ("getattr exit");
     return ret;
 }
 
 static int
 mtpfs_mknod (const gchar * path, mode_t mode, dev_t dev)
 {
-    if (DEBUG) g_debug ("mknod");
     int item_id = parse_path (path);
     if (item_id > 0)
         return -EEXIST;
-
     myfiles = g_slist_append (myfiles, (gpointer) (g_strdup (path)));
     if (DEBUG) g_debug ("NEW FILE");
     return 0;
@@ -797,6 +913,8 @@ mtpfs_unlink (const gchar * path)
         return -ENOENT;
     g_mutex_lock(device_lock);
     ret = LIBMTP_Delete_Object (device, item_id);
+    if (ret != 0)
+      LIBMTP_Dump_Errorstack (device);
     if (strncmp (path, "/Playlists",10) == 0) {
         playlists_changed = TRUE;
     } else {
@@ -810,7 +928,10 @@ mtpfs_unlink (const gchar * path)
 static int
 mtpfs_mkdir (const char *path, mode_t mode)
 {
-    if (DEBUG) g_debug ("mkdir");
+    if (DEBUG) g_debug ("mkdir: %s", path);
+    if (g_str_has_prefix (path, "/.Trash") == TRUE)
+      return -EPERM;
+
     int ret = 0;
     GSList *item;
     item = g_slist_find_custom (myfiles, path, (GCompareFunc) strcmp);
@@ -877,7 +998,7 @@ mtpfs_rmdir (const char *path)
     return ret;
 }
 
-/* Not working. need some way in libmtp to rename objects
+/* Not working. need some way in libmtp to rename objects 
 int
 mtpfs_rename (const char *oldname, const char *newname)
 {
@@ -915,6 +1036,75 @@ mtpfs_rename (const char *oldname, const char *newname)
     return ret;
 }
 */
+
+/* Allow renaming of empty folders only */
+int
+mtpfs_rename (const char *oldname, const char *newname)
+{
+    int folder_id = -1, parent_id;
+    int folder_empty = 1;
+    int ret = -ENOTEMPTY;
+    LIBMTP_folder_t *folder;
+    LIBMTP_file_t *file;
+
+	
+    if (strcmp (oldname, "/") != 0) {
+        folder_id = lookup_folder_id (folders, (gchar *) oldname, "");
+    }
+    if (folder_id < 0)
+        return -ENOENT;
+
+    g_mutex_lock(device_lock);
+    check_folders();
+    folder = LIBMTP_Find_Folder (folders, folder_id);
+    g_mutex_unlock(device_lock);
+
+    /* MTP Folder object not found? */
+    if (folder == NULL)
+		return -ENOENT;
+
+    parent_id = folder->parent_id;
+    folder = folder->child;
+
+    /* Check if empty folder */
+    if (DEBUG) g_debug("Checking empty folder: folders");
+    while (folder != NULL) {
+        if (folder->parent_id == folder_id) {
+			folder_empty = 0;
+			break;
+        }
+        folder = folder->sibling;
+    }
+    
+    if (folder_empty == 1) {
+		/* Find files */
+		check_files();
+		file = files;
+		while (file != NULL) {
+			if (file->parent_id == folder_id) {
+				folder_empty = 0;
+				break;
+			}
+			file = file->next;
+		}
+
+		/* Rename folder. First remove old folder, then create the new one */
+		if (folder_empty == 1) {
+			struct stat stbuf;
+			if ( (ret = mtpfs_getattr (oldname, &stbuf)) == 0) {
+				if (DEBUG) g_debug("removing folder %s, id %d", oldname, folder_id);
+
+				ret = mtpfs_mkdir (newname, stbuf.st_mode);
+				folders_changed=TRUE;
+				g_mutex_lock(device_lock);
+				LIBMTP_Delete_Object(device, folder_id);
+				g_mutex_unlock(device_lock);
+				folders_changed=TRUE;
+			}
+		}
+    }
+    return ret;
+}
 
 static int
 mtpfs_statfs (const char *path, struct statfs *stbuf)
@@ -965,7 +1155,7 @@ static struct fuse_operations mtpfs_oper = {
     .destroy = mtpfs_destroy,
     .mkdir   = mtpfs_mkdir,
     .rmdir   = mtpfs_rmdir,
-/*    .rename  = mtpfs_rename,*/
+    .rename  = mtpfs_rename,
     .statfs  = mtpfs_statfs,
     .init    = mtpfs_init,
 };
