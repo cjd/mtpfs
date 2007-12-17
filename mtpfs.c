@@ -241,6 +241,7 @@ find_filetype (const gchar * filename)
         printf ("Tagging as unknown file type.\n");
         filetype = LIBMTP_FILETYPE_UNKNOWN;
     }
+	g_free (ptype);
     return filetype;
 }
 
@@ -256,16 +257,15 @@ lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
     gchar *current;
     current = g_strconcat(parent, "/", folderlist->name,NULL);
     if (strcasecmp (path, current) == 0) {
-        return folderlist->folder_id;
-    }
-    if (strncasecmp (path, current, strlen (current)) == 0) {
+        ret = folderlist->folder_id;
+    } else if (strncasecmp (path, current, strlen (current)) == 0) {
         ret = lookup_folder_id (folderlist->child, path, current);
     }
+
+    if (ret == -1) {
+		ret = lookup_folder_id (folderlist->sibling, path, parent);
+	}
     g_free(current);
-    if (ret >= 0) {
-        return ret;
-    }
-    ret = lookup_folder_id (folderlist->sibling, path, parent);
     return ret;
 }
 
@@ -353,7 +353,7 @@ parse_path (const gchar * path)
                             if (DEBUG) g_debug ("found:%d:%s", file->item_id, file->filename);
 
                             item_id = file->item_id;
-                            return item_id;
+							break; // found!
                         }
                     }
                     file = file->next;
@@ -364,9 +364,15 @@ parse_path (const gchar * path)
                     res = item_id;
 					break;
                 }
+				else
+				{
+					res = item_id;
+					break;
+				}
             }
         }
     }
+	g_free (directory);
     g_strfreev (fields);
     if (DEBUG) g_debug ("parse_path exiting:%s",path);
     return res;
@@ -389,7 +395,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             return 0;
         } else {
             //find parent id
-            gchar *filename = "";
+            gchar *filename = g_strdup("");
             gchar **fields;
             gchar *directory;
             directory = (gchar *) g_malloc (strlen (path));
@@ -400,10 +406,12 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             for (i = 0; fields[i] != NULL; i++) {
                 if (strlen (fields[i]) > 0) {
                     if (fields[i + 1] == NULL) {
-                        directory = g_strndup (directory, strlen (directory) - 1);
-                        parent_id = lookup_folder_id (folders, directory, "");
+                        gchar *tmp = g_strndup (directory, strlen (directory) - 1);
+                        parent_id = lookup_folder_id (folders, tmp, "");
+						g_free (tmp);
                         if (parent_id < 0)
                             parent_id = 0;
+						g_free (filename);
                         filename = g_strdup (fields[i]);
                     } else {
                         directory = strcat (directory, fields[i]);
@@ -504,8 +512,12 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             if (ret == 0)
                 if (DEBUG) g_debug ("Sent %s",path);
             // Cleanup
+			if (item && item->data)
+				g_free (item->data);
             myfiles = g_slist_remove (myfiles, item->data);
             g_strfreev (fields);
+			g_free (filename);
+			g_free (directory);
             close (fi->fh);
             // Refresh filelist
             files_changed = TRUE;
@@ -553,7 +565,11 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
             name = g_strconcat(playlist->name,".m3u",NULL);
             if (DEBUG) g_debug("Playlist:%s",name);
             if (filler (buf, name, &st, 0))
+            {
+                g_free (name);
                 break;
+            }
+            g_free (name);
             playlist=playlist->next;
         }
         return 0;
@@ -938,9 +954,10 @@ mtpfs_mkdir (const char *path, mode_t mode)
     int item_id = parse_path (path);
     if ((item == NULL) && (item_id < 0)) {
         // Split path and find parent_id
-        gchar *filename="";
+        gchar *filename = g_strdup("");
         gchar **fields;
         gchar *directory;
+	
         directory = (gchar *) g_malloc (strlen (path));
         directory = strcpy (directory, "/");
         fields = g_strsplit (path, "/", -1);
@@ -949,11 +966,13 @@ mtpfs_mkdir (const char *path, mode_t mode)
         for (i = 0; fields[i] != NULL; i++) {
             if (strlen (fields[i]) > 0) {
                 if (fields[i + 1] == NULL) {
-                    directory = g_strndup (directory, strlen (directory) - 1);
+                    gchar *tmp = g_strndup (directory, strlen (directory) - 1);
                     check_folders();
-                    parent_id = lookup_folder_id (folders, directory, "");
+                    parent_id = lookup_folder_id (folders, tmp, "");
+					g_free (tmp);
                     if (parent_id < 0)
                         parent_id = 0;
+					g_free (filename);
                     filename = g_strdup (fields[i]);
                 } else {
                     directory = strcat (directory, fields[i]);
@@ -966,6 +985,8 @@ mtpfs_mkdir (const char *path, mode_t mode)
         ret = LIBMTP_Create_Folder (device, filename, parent_id);
         g_mutex_unlock(device_lock);
         g_strfreev (fields);
+		g_free (directory);
+		g_free (filename);
         if (ret == 0) {
             ret = -EEXIST;
         } else {

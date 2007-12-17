@@ -1,0 +1,4 @@
+2007-11-26    <sejerpz@tin.it>
+
+	* mtpfs.c: fixed several memory leaks with valgrind
+
