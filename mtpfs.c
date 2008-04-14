@@ -8,6 +8,28 @@
 
 #include <mtpfs.h>
 
+#define DEBUG 1
+
+#if DEBUG
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define DBG(a...) g_debug ( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a);
+#else
+#define DBG(a...)
+#endif
+
+#if DEBUG
+static void dump_mtp_error()
+{
+	LIBMTP_Dump_Errorstack(device);
+	LIBMTP_Clear_Errorstack(device);
+}
+#else
+#define dump_mtp_error()
+#endif
+
+#define enter_lock(a...) 	do { DBG(a); g_mutex_lock(device_lock); } while(0)
+#define return_unlock(a)	do { g_mutex_unlock(device_lock); return a; } while(0)
 
 void
 free_files(LIBMTP_file_t *filelist)
@@ -35,17 +57,15 @@ void
 check_files ()
 {
     if (files_changed) {
-        if (DEBUG) g_debug("Refreshing Filelist");
+        DBG("Refreshing Filelist");
         LIBMTP_file_t *newfiles = NULL;
-        g_mutex_lock(device_lock);
         if (files) free_files(files);
         newfiles = LIBMTP_Get_Filelisting_With_Callback(device, NULL, NULL);
         files = newfiles;
         newfiles = NULL;
         files_changed = FALSE;
-        g_mutex_unlock(device_lock);
-		check_lost_files ();
-        if (DEBUG) g_debug("Refreshing Filelist exiting");
+	check_lost_files ();
+        DBG("Refreshing Filelist exiting");
     }
 }
 
@@ -74,21 +94,20 @@ check_lost_files ()
 		} else {
 			parent_found = last_parent_found;
 		}
-		if (DEBUG) g_debug("MTPFS checking for lost files %s, parent %d - %s", item->filename, last_parent_id, ( parent_found ? "FALSE" : "TRUE" ) );
+		DBG("MTPFS checking for lost files %s, parent %d - %s", item->filename, last_parent_id, ( parent_found ? "FALSE" : "TRUE" ) );
 		if (parent_found == FALSE) {
 			lostfiles = g_slist_append (lostfiles, item);
 		}
 	}
-	if (DEBUG) g_debug("MTPFS checking for lost files exit found %d lost tracks", g_slist_length (lostfiles) );
+	DBG("MTPFS checking for lost files exit found %d lost tracks", g_slist_length (lostfiles) );
 }
 
 void
 check_folders ()
 {
     if (folders_changed) {
-        if (DEBUG) g_debug("Refreshing Folderlist");
+        DBG("Refreshing Folderlist");
         LIBMTP_folder_t *newfolders = NULL;
-        g_mutex_lock(device_lock);
         if (folders) {
             LIBMTP_destroy_folder_t(folders);
         }
@@ -96,7 +115,6 @@ check_folders ()
         folders = newfolders;
         newfolders = NULL;
         folders_changed= FALSE;
-        g_mutex_unlock(device_lock);
     }
 }
 
@@ -104,21 +122,19 @@ void
 check_playlists ()
 {
     if (playlists_changed) {
-        if (DEBUG) g_debug("Refreshing Playlists");
+        DBG("Refreshing Playlists");
         LIBMTP_playlist_t *newplaylists;
-        g_mutex_lock(device_lock);
         if (playlists) free_playlists(playlists);
         newplaylists = LIBMTP_Get_Playlist_List(device);
         playlists = newplaylists;
         playlists_changed = FALSE;
-        g_mutex_unlock(device_lock);
     }
 }
 
 int
 save_playlist (const char *path, struct fuse_file_info *fi)
 {
-    if (DEBUG) g_debug("save_playlist");
+    DBG("save_playlist");
     int ret=0;
 
     LIBMTP_playlist_t *playlist;
@@ -132,7 +148,7 @@ save_playlist (const char *path, struct fuse_file_info *fi)
     fields = g_strsplit(path,"/",-1);
     gchar *playlist_name;
     playlist_name = g_strndup(fields[2],strlen(fields[2])-4);
-    if (DEBUG) g_debug("Adding:%s",playlist_name);
+    DBG("Adding:%s",playlist_name);
     g_strfreev(fields);
 
     playlist=LIBMTP_new_playlist_t();
@@ -144,7 +160,7 @@ save_playlist (const char *path, struct fuse_file_info *fi)
         item_id = parse_path(item_path);
         if (item_id != -1) {
             tmplist = g_slist_append(tmplist,GUINT_TO_POINTER(item_id));
-            g_debug("Adding to tmplist:%d",item_id);
+            DBG("Adding to tmplist:%d",item_id);
         }
     }
     playlist->no_tracks = g_slist_length(tmplist);
@@ -152,10 +168,10 @@ save_playlist (const char *path, struct fuse_file_info *fi)
     int i;
     for (i = 0; i < playlist->no_tracks; i++) {
             tracks[i]=(uint32_t)GPOINTER_TO_UINT(g_slist_nth_data(tmplist,i));
-            g_debug("Adding:%d-%d",i,tracks[i]);
+            DBG("Adding:%d-%d",i,tracks[i]);
     }
     playlist->tracks = tracks;
-    g_debug("Total:%d",playlist->no_tracks);
+    DBG("Total:%d",playlist->no_tracks);
     
     int playlist_id = 0;
     LIBMTP_playlist_t *tmp_playlist;
@@ -169,11 +185,11 @@ save_playlist (const char *path, struct fuse_file_info *fi)
     }
 
     if (playlist_id > 0) {
-        if(DEBUG) g_debug("Update playlist %d",playlist_id);
+        DBG("Update playlist %d",playlist_id);
         playlist->playlist_id=playlist_id;
         ret = LIBMTP_Update_Playlist(device,playlist);
     } else {
-        if(DEBUG) g_debug("New playlist");
+        DBG("New playlist");
         ret = LIBMTP_Create_New_Playlist(device,playlist,0);
     }
     playlists_changed=TRUE;
@@ -184,7 +200,7 @@ save_playlist (const char *path, struct fuse_file_info *fi)
 static LIBMTP_filetype_t
 find_filetype (const gchar * filename)
 {
-    if (DEBUG) g_debug ("find_filetype");
+    DBG("find_filetype");
     gchar **fields;
     fields = g_strsplit (filename, ".", -1);
     gchar *ptype;
@@ -237,8 +253,8 @@ find_filetype (const gchar * filename)
                !strcasecmp (ptype, "sys")) {
         filetype = LIBMTP_FILETYPE_WINEXEC;
     } else {
-        printf ("Sorry, file type \"%s\" is not yet supported\n", ptype);
-        printf ("Tagging as unknown file type.\n");
+        g_error("Sorry, file type \"%s\" is not yet supported\n", ptype);
+        g_error("Tagging as unknown file type.\n");
         filetype = LIBMTP_FILETYPE_UNKNOWN;
     }
 	g_free (ptype);
@@ -248,7 +264,7 @@ find_filetype (const gchar * filename)
 static int
 lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
 {
-    //if (DEBUG) g_debug("lookup_folder_id");
+    //DBG("lookup_folder_id");
     int ret = -1;
     if (folderlist == NULL) {
         return -1;
@@ -272,7 +288,7 @@ lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
 static int
 parse_path (const gchar * path)
 {
-    if (DEBUG) g_debug ("parse_path:%s",path);
+    DBG("parse_path:%s",path);
     int res;
     int item_id = -1;
     int i;
@@ -341,21 +357,21 @@ parse_path (const gchar * path)
                 if (strcmp (directory, "") != 0) {
                     folder_id = lookup_folder_id (folder, directory, "");
                 }
-                if (DEBUG) g_debug ("parent id:%d:%s", folder_id, directory);
+                DBG("parent id:%d:%s", folder_id, directory);
                 LIBMTP_file_t *file;
                 check_files();
                 file = files;
                 while (file != NULL) {
-                    if (file->parent_id == folder_id) {
-						if (DEBUG && file->filename == NULL) g_debug ("MTPFS filename NULL");
+			if (file->parent_id == folder_id) {
+				if (file->filename == NULL) DBG("MTPFS filename NULL");
 
-                        if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
-                            if (DEBUG) g_debug ("found:%d:%s", file->item_id, file->filename);
+				if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
+					DBG("found:%d:%s", file->item_id, file->filename);
 
-                            item_id = file->item_id;
-							break; // found!
-                        }
-                    }
+					item_id = file->item_id;
+					break; // found!
+				}
+			}
                     file = file->next;
                 }
                 if (item_id < 0) {
@@ -374,25 +390,23 @@ parse_path (const gchar * path)
     }
 	g_free (directory);
     g_strfreev (fields);
-    if (DEBUG) g_debug ("parse_path exiting:%s",path);
+    DBG("parse_path exiting:%s",path);
     return res;
 }
 
 static int
 mtpfs_release (const char *path, struct fuse_file_info *fi)
 {
-    if (DEBUG) g_debug ("release");
+    enter_lock("release: %s", path);
     // Check cached files first
     GSList *item;
     item = g_slist_find_custom (myfiles, path, (GCompareFunc) strcmp);
 
     if (item != NULL) {
         if (strncmp("/Playlists/",path,11) == 0) {
-            g_mutex_lock(device_lock);
             save_playlist(path,fi);
             close (fi->fh);
-            g_mutex_unlock(device_lock);
-            return 0;
+            return_unlock(0);
         } else {
             //find parent id
             gchar *filename = g_strdup("");
@@ -419,7 +433,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                     }
                 }
             }
-            if (DEBUG) g_debug ("%s:%s:%d", filename, directory, parent_id);
+            DBG("%s:%s:%d", filename, directory, parent_id);
     
             struct stat st;
             uint64_t filesize;
@@ -482,16 +496,14 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->filetype = filetype;
                 genfile->filename = g_strdup (filename);
                 //title,artist,genre,album,date,tracknumber,duration,samplerate,nochannels,wavecodec,bitrate,bitratetype,rating,usecount
-                //g_debug("%d:%d:%d",fi->fh,genfile->duration,genfile->filesize);
-                g_mutex_lock(device_lock);
+                //DBG("%d:%d:%d",fi->fh,genfile->duration,genfile->filesize);
                 ret =
                     LIBMTP_Send_Track_From_File_Descriptor (device, fi->fh,
 						genfile, NULL, NULL,
 						parent_id);
-                g_mutex_unlock(device_lock);
                 id3_file_close (id3_fh);
                 LIBMTP_destroy_track_t (genfile);
-                if (DEBUG) g_debug ("Sent TRACK %s",path);
+                DBG("Sent TRACK %s",path);
             } else {
                 LIBMTP_file_t *genfile;
                 genfile = LIBMTP_new_file_t ();
@@ -500,17 +512,15 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->filename = g_strdup (filename);
                 genfile->parent_id = parent_id;
     
-                g_mutex_lock(device_lock);
                 ret =
                     LIBMTP_Send_File_From_File_Descriptor (device, fi->fh,
 						genfile, NULL, NULL,
 						parent_id);
-                g_mutex_unlock(device_lock);
                 LIBMTP_destroy_file_t (genfile);
-                if (DEBUG) g_debug ("Sent FILE %s",path);
+                DBG("Sent FILE %s",path);
             }
             if (ret == 0)
-                if (DEBUG) g_debug ("Sent %s",path);
+                DBG("Sent %s",path);
             // Cleanup
 			if (item && item->data)
 				g_free (item->data);
@@ -522,28 +532,29 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             // Refresh filelist
             files_changed = TRUE;
             //files = LIBMTP_Get_Filelisting(device);
-            return ret;
+            return_unlock(ret);
         }
     }
     close (fi->fh);
-    return 0;
+    return_unlock();
 }
 
 void
 mtpfs_destroy ()
 {
-    if (DEBUG) g_debug ("destroy");
+    enter_lock("destroy");
     if (files) free_files(files);
     if (folders) LIBMTP_destroy_folder_t(folders);
     if (playlists) free_playlists(playlists);
     LIBMTP_Release_Device (device);
+    return_unlock();
 }
 
 static int
 mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
                off_t offset, struct fuse_file_info *fi)
 {
-	if (DEBUG) g_debug ("readdir %s", path);
+	enter_lock("readdir %s", path);
     LIBMTP_folder_t *folder;
 
     // Add common entries
@@ -552,7 +563,7 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
 
     // Are we looking at the playlists?
     if (strncmp (path, "/Playlists",10) == 0) {
-        if (DEBUG) g_debug("Checking Playlists");
+        DBG("Checking Playlists");
         LIBMTP_playlist_t *playlist;
         check_playlists();
         playlist=playlists;
@@ -563,7 +574,7 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
             st.st_mode = S_IFREG | 0666;
             gchar *name;
             name = g_strconcat(playlist->name,".m3u",NULL);
-            if (DEBUG) g_debug("Playlist:%s",name);
+            DBG("Playlist:%s",name);
             if (filler (buf, name, &st, 0))
             {
                 g_free (name);
@@ -572,7 +583,7 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
             g_free (name);
             playlist=playlist->next;
         }
-        return 0;
+        return_unlock(0);
     }
 
     // Are we looking at lost+found dir?
@@ -590,7 +601,7 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
 			if (filler (buf, (file->filename == NULL ? "<mtpfs null>" : file->filename), &st, 0))
 				break;
 		}
-		return 0;
+		return_unlock(0);
     }
 
     // Get folder listing.
@@ -610,17 +621,15 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
 			filler (buf, "lost+found", NULL, 0);
 		}
     } else {
-        g_mutex_lock(device_lock);
         check_folders();
         folder = LIBMTP_Find_Folder (folders, folder_id);
-        g_mutex_unlock(device_lock);
         folder = folder->child;
     }
 
-    if (DEBUG) g_debug("Checking folders");
+    DBG("Checking folders");
     while (folder != NULL) {
         if (folder->parent_id == folder_id) {
-			if (DEBUG) g_debug("found folder: %s, id %d", folder->name, folder->folder_id);
+			DBG("found folder: %s, id %d", folder->name, folder->folder_id);
             struct stat st;
             memset (&st, 0, sizeof (st));
             st.st_ino = folder->folder_id;
@@ -630,9 +639,9 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         }
         folder = folder->sibling;
     }
-    if (DEBUG) g_debug("Checking folders end");
+    DBG("Checking folders end");
     LIBMTP_destroy_folder_t (folder);
-    if (DEBUG) g_debug("Checking files");
+    DBG("Checking files");
     // Find files
     LIBMTP_file_t *file, *tmp;
     check_files();
@@ -649,14 +658,14 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
         tmp = file;
         file = file->next;
     }
-    if (DEBUG) g_debug("readdir exit");
-    return 0;
+    DBG("readdir exit");
+    return_unlock(0);
 }
 
 static int
 mtpfs_getattr (const gchar * path, struct stat *stbuf)
 {
-	if (DEBUG) g_debug ("getattr %s", path);
+	enter_lock("getattr %s", path);
 
     int ret = 0;
     memset (stbuf, 0, sizeof (struct stat));
@@ -675,7 +684,7 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
             stbuf->st_mode = S_IFREG | 0777;
             stbuf->st_size = 0;
             stbuf->st_blocks = 2;
-            return 0;
+            return_unlock(0);
         }
     }
 
@@ -684,7 +693,7 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
 			strcasecmp (path, "/lost+found") == 0)) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
-        return 0;
+        return_unlock(0);
     }
 
 
@@ -716,11 +725,11 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
                 stbuf->st_mode = S_IFREG | 0777;
                 stbuf->st_size = filesize;
                 stbuf->st_blocks = 2;
-                return 0;
+                return_unlock(0);
             }
             playlist = playlist->next;   
         }
-        return -ENOENT;
+        return_unlock(-ENOENT);
     }
 
     if (path != NULL && strncasecmp (path, "/lost+found",11) == 0) {
@@ -736,11 +745,11 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
 					(file->filesize % 512 > 0 ? 1 : 0);
 				stbuf->st_nlink = 1;
 				stbuf->st_mode = S_IFREG | 0777;
-				return 0;
+				return_unlock(0);
 			}
 		}
 
-		return -ENOENT;
+		return_unlock(-ENOENT);
     }
 
     if (path != NULL && strcmp (path, "/") == 0) {
@@ -759,7 +768,7 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
         } else {
             item_id = parse_path (path);
             LIBMTP_file_t *file;
-            if (DEBUG) g_debug ("%d:%s", item_id, path);
+            DBG("%d:%s", item_id, path);
             check_files();
             file = files;
             gboolean found = FALSE;
@@ -781,36 +790,37 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
         }
     }
 
-    if (DEBUG) g_debug ("getattr exit");
-    return ret;
+    DBG("getattr exit");
+    return_unlock(ret);
 }
 
 static int
 mtpfs_mknod (const gchar * path, mode_t mode, dev_t dev)
 {
+	enter_lock("mknod %s", path);
     int item_id = parse_path (path);
     if (item_id > 0)
-        return -EEXIST;
+        return_unlock(-EEXIST);
     myfiles = g_slist_append (myfiles, (gpointer) (g_strdup (path)));
-    if (DEBUG) g_debug ("NEW FILE");
-    return 0;
+    DBG("NEW FILE");
+    return_unlock(0);
 }
 
 static int
 mtpfs_open (const gchar * path, struct fuse_file_info *fi)
 {
-    if (DEBUG) g_debug ("open");
+    enter_lock("open");
     int item_id = -1;
     item_id = parse_path (path);
     if (item_id < 0)
-        return -ENOENT;
+        return_unlock(-ENOENT);
 
     if (fi->flags == O_RDONLY) {
-        if (DEBUG) g_debug("read");
+        DBG("read");
     } else if (fi->flags == O_WRONLY) {
-        if (DEBUG) g_debug("write");
+        DBG("write");
     } else if (fi->flags == O_RDWR) {
-        if (DEBUG) g_debug("rdwrite");
+        DBG("rdwrite");
     }
 
     FILE *filetmp = tmpfile ();
@@ -836,9 +846,7 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
                     for (i=0; i <playlist->no_tracks; i++){
                         LIBMTP_file_t *file;
                         LIBMTP_folder_t *folder;
-                        g_mutex_lock(device_lock);
                         file = LIBMTP_Get_Filemetadata(device,playlist->tracks[i]);
-                        g_mutex_unlock(device_lock);
                         if (file != NULL) {
                             gchar *path;
                             path = (gchar *) g_malloc (1024);
@@ -846,16 +854,14 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
                             int parent_id = file->parent_id;
                             while (parent_id != 0) {
                                 check_folders();
-                                g_mutex_lock(device_lock);
                                 folder = LIBMTP_Find_Folder(folders,parent_id);
                                 path = strcat(path,folder->name);
                                 path = strcat(path,"/");
                                 parent_id = folder->parent_id;
-                                g_mutex_unlock(device_lock);
                             }
                             path = strcat (path,file->filename);
                             fprintf (filetmp,"%s\n",path);
-                            if (DEBUG) g_debug("%s\n",path);
+                            DBG("%s\n",path);
                         }
                     }
                     //LIBMTP_destroy_file_t(file);
@@ -865,48 +871,46 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
                 playlist=playlist->next;
             }
         } else {
-            g_mutex_lock(device_lock);
             int ret =
                 LIBMTP_Get_File_To_File_Descriptor (device, item_id, tmpfile,
                                                     NULL, NULL);
-            g_mutex_unlock(device_lock);
             if (ret == 0) {
                 fi->fh = tmpfile;
             } else {
-                return -ENOENT;
+                return_unlock(-ENOENT);
             }
         }
     } else {
-        return -ENOENT;
+        return_unlock(-ENOENT);
     }
 
-    return 0;
+    return_unlock(0);
 }
 
 static int
 mtpfs_read (const gchar * path, gchar * buf, size_t size, off_t offset,
             struct fuse_file_info *fi)
 {
-    if (DEBUG) g_debug ("read");
+    enter_lock("read");
     int ret;
 
     int item_id = -1;
     item_id = parse_path (path);
     if (item_id < 0)
-        return -ENOENT;
+        return_unlock(-ENOENT);
 
     ret = pread (fi->fh, buf, size, offset);
     if (ret == -1)
         ret = -errno;
 
-    return ret;
+    return_unlock(ret);
 }
 
 static int
 mtpfs_write (const gchar * path, const gchar * buf, size_t size, off_t offset,
              struct fuse_file_info *fi)
 {
-    //if (DEBUG) g_debug ("write");
+    enter_lock("write");
     int ret;
     if (fi->fh != -1) {
         ret = pwrite (fi->fh, buf, size, offset);
@@ -914,20 +918,19 @@ mtpfs_write (const gchar * path, const gchar * buf, size_t size, off_t offset,
         ret = -ENOENT;
     }
 
-    return ret;
+    return_unlock(ret);
 }
 
 
 static int
 mtpfs_unlink (const gchar * path)
 {
-    if (DEBUG) g_debug ("unlink");
+    enter_lock("unlink");
     int ret = 0;
     int item_id = -1;
     item_id = parse_path (path);
     if (item_id < 0)
-        return -ENOENT;
-    g_mutex_lock(device_lock);
+        return_unlock(-ENOENT);
     ret = LIBMTP_Delete_Object (device, item_id);
     if (ret != 0)
       LIBMTP_Dump_Errorstack (device);
@@ -936,17 +939,16 @@ mtpfs_unlink (const gchar * path)
     } else {
         files_changed = TRUE;
     }
-    g_mutex_unlock(device_lock);
 
-    return ret;
+    return_unlock(ret);
 }
 
 static int
 mtpfs_mkdir (const char *path, mode_t mode)
 {
-    if (DEBUG) g_debug ("mkdir: %s", path);
+    enter_lock("mkdir: %s", path);
     if (g_str_has_prefix (path, "/.Trash") == TRUE)
-      return -EPERM;
+      return_unlock(-EPERM);
 
     int ret = 0;
     GSList *item;
@@ -980,10 +982,8 @@ mtpfs_mkdir (const char *path, mode_t mode)
                 }
             }
         }
-        if (DEBUG) g_debug ("%s:%s:%d", filename, directory, parent_id);
-        g_mutex_lock(device_lock);
+        DBG("%s:%s:%d", filename, directory, parent_id);
         ret = LIBMTP_Create_Folder (device, filename, parent_id);
-        g_mutex_unlock(device_lock);
         g_strfreev (fields);
 		g_free (directory);
 		g_free (filename);
@@ -996,27 +996,25 @@ mtpfs_mkdir (const char *path, mode_t mode)
     } else {
         ret = -EEXIST;
     }
-    return ret;
+    return_unlock(ret);
 }
 
 static int
 mtpfs_rmdir (const char *path)
 {
-    if (DEBUG) g_debug ("rmdir");
+    enter_lock("rmdir %s", path);
     int ret = 0;
     int folder_id = -1;
     if (strcmp (path, "/") != 0) {
         folder_id = lookup_folder_id (folders, (gchar *) path, "");
     }
     if (folder_id < 0)
-        return -ENOENT;
+        return_unlock(-ENOENT);
     
-    g_mutex_lock(device_lock);
     LIBMTP_Delete_Object(device, folder_id);
-    g_mutex_unlock(device_lock);
 
     folders_changed=TRUE;
-    return ret;
+    return_unlock(ret);
 }
 
 /* Not working. need some way in libmtp to rename objects 
@@ -1049,7 +1047,7 @@ mtpfs_rename (const char *oldname, const char *newname)
             }
         }
     }
-    if (DEBUG) g_debug ("%s:%s:%d", filename, directory, parent_id);
+    DBG("%s:%s:%d", filename, directory, parent_id);
 
     track->parent_id = parent_id;
     track->title = g_strdup(filename);
@@ -1062,33 +1060,32 @@ mtpfs_rename (const char *oldname, const char *newname)
 int
 mtpfs_rename (const char *oldname, const char *newname)
 {
+ 	enter_lock("rename '%s' to '%s'", oldname, newname);
+
     int folder_id = -1, parent_id;
     int folder_empty = 1;
     int ret = -ENOTEMPTY;
     LIBMTP_folder_t *folder;
     LIBMTP_file_t *file;
-
 	
     if (strcmp (oldname, "/") != 0) {
         folder_id = lookup_folder_id (folders, (gchar *) oldname, "");
     }
     if (folder_id < 0)
-        return -ENOENT;
+        return_unlock(-ENOENT);
 
-    g_mutex_lock(device_lock);
     check_folders();
     folder = LIBMTP_Find_Folder (folders, folder_id);
-    g_mutex_unlock(device_lock);
 
     /* MTP Folder object not found? */
     if (folder == NULL)
-		return -ENOENT;
+		return_unlock(-ENOENT);
 
     parent_id = folder->parent_id;
     folder = folder->child;
 
     /* Check if empty folder */
-    if (DEBUG) g_debug("Checking empty folder: folders");
+    DBG("Checking empty folder: folders");
     while (folder != NULL) {
         if (folder->parent_id == folder_id) {
 			folder_empty = 0;
@@ -1113,24 +1110,22 @@ mtpfs_rename (const char *oldname, const char *newname)
 		if (folder_empty == 1) {
 			struct stat stbuf;
 			if ( (ret = mtpfs_getattr (oldname, &stbuf)) == 0) {
-				if (DEBUG) g_debug("removing folder %s, id %d", oldname, folder_id);
+				DBG("removing folder %s, id %d", oldname, folder_id);
 
 				ret = mtpfs_mkdir (newname, stbuf.st_mode);
 				folders_changed=TRUE;
-				g_mutex_lock(device_lock);
 				LIBMTP_Delete_Object(device, folder_id);
-				g_mutex_unlock(device_lock);
 				folders_changed=TRUE;
 			}
 		}
     }
-    return ret;
+    return_unlock(ret);
 }
 
 static int
 mtpfs_statfs (const char *path, struct statfs *stbuf)
 {
-    if (DEBUG) g_debug ("mtpfs_statfs");
+    DBG("mtpfs_statfs");
     stbuf->f_bsize=1024;
     stbuf->f_blocks=device->storage->MaxCapacity/1024;
     stbuf->f_bfree=device->storage->FreeSpaceInBytes/1024;
@@ -1142,11 +1137,11 @@ mtpfs_statfs (const char *path, struct statfs *stbuf)
 void *
 mtpfs_init ()
 {
-    if (DEBUG) g_debug ("mtpfs_init");
+    DBG("mtpfs_init");
     LIBMTP_Init ();
     device = LIBMTP_Get_First_Device ();
     if (device == NULL) {
-        if (DEBUG) g_debug ("No devices.");
+        DBG("No devices.");
         exit (1);
     }
     if (!g_thread_supported ()) g_thread_init(NULL);
@@ -1154,13 +1149,13 @@ mtpfs_init ()
     files_changed=TRUE;
     folders_changed=TRUE;
     playlists_changed=TRUE;
-    //if (DEBUG) g_debug ("Get Folder List");
+    //DBG("Get Folder List");
     //folders = LIBMTP_Get_Folder_List (device);
-    //if (DEBUG) g_debug ("Get File List");
+    //DBG("Get File List");
     //files = LIBMTP_Get_Filelisting (device);
-    //if (DEBUG) g_debug ("Get Playlists");
+    //DBG("Get Playlists");
     //playlists = LIBMTP_Get_Playlist_List(device);
-    if (DEBUG) g_debug ("Ready");
+    DBG("Ready");
     return 0;
 }
 
@@ -1303,7 +1298,7 @@ int scan(void const *ptr, ssize_t len)
     struct mad_header header;
     struct xing xing;
     xing.frames=0;
-    g_debug("scan: %d",len);
+    DBG("scan: %d",len);
 
 
     unsigned long bitrate = 0;
@@ -1392,7 +1387,7 @@ int scan(void const *ptr, ssize_t len)
         num_frames = (long) (time * header.samplerate / nsamples);
 
         duration = (int)time;
-        g_debug("d:%d",duration);
+        DBG("d:%d",duration);
     }
 
     else if (has_xing)
