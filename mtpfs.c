@@ -28,8 +28,8 @@ static void dump_mtp_error()
 #define dump_mtp_error()
 #endif
 
-#define enter_lock(a...) 	do { DBG(a); g_mutex_lock(device_lock); } while(0)
-#define return_unlock(a)	do { g_mutex_unlock(device_lock); return a; } while(0)
+#define enter_lock(a...)       do { DBG("lock"); DBG(a); g_mutex_lock(device_lock); } while(0)
+#define return_unlock(a)       do { DBG("return unlock"); g_mutex_unlock(device_lock); return a; } while(0)
 
 void
 free_files(LIBMTP_file_t *filelist)
@@ -663,10 +663,8 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
 }
 
 static int
-mtpfs_getattr (const gchar * path, struct stat *stbuf)
+mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 {
-	enter_lock("getattr %s", path);
-
     int ret = 0;
     memset (stbuf, 0, sizeof (struct stat));
 
@@ -789,6 +787,15 @@ mtpfs_getattr (const gchar * path, struct stat *stbuf)
             }
         }
     }
+
+    return ret;
+}
+static int
+mtpfs_getattr (const gchar * path, struct stat *stbuf)
+{
+    enter_lock("getattr %s", path);
+
+    int ret = mtpfs_getattr_real (path, stbuf);
 
     DBG("getattr exit");
     return_unlock(ret);
@@ -944,9 +951,8 @@ mtpfs_unlink (const gchar * path)
 }
 
 static int
-mtpfs_mkdir (const char *path, mode_t mode)
+mtpfs_mkdir_real (const char *path, mode_t mode)
 {
-    enter_lock("mkdir: %s", path);
     if (g_str_has_prefix (path, "/.Trash") == TRUE)
       return_unlock(-EPERM);
 
@@ -996,6 +1002,16 @@ mtpfs_mkdir (const char *path, mode_t mode)
     } else {
         ret = -EEXIST;
     }
+    return ret;
+}
+
+
+static int
+mtpfs_mkdir (const char *path, mode_t mode)
+{
+    enter_lock("mkdir: %s", path);
+    int ret = mtpfs_mkdir_real (path, mode);
+
     return_unlock(ret);
 }
 
@@ -1085,7 +1101,8 @@ mtpfs_rename (const char *oldname, const char *newname)
     folder = folder->child;
 
     /* Check if empty folder */
-    DBG("Checking empty folder: folders");
+    DBG("Checking empty folder start for: subfolders");
+
     while (folder != NULL) {
         if (folder->parent_id == folder_id) {
 			folder_empty = 0;
@@ -1093,10 +1110,13 @@ mtpfs_rename (const char *oldname, const char *newname)
         }
         folder = folder->sibling;
     }
+
+    DBG("Checking empty folder end for: subfolders. Result: %s", (folder_empty == 1 ? "empty" : "not empty"));
     
     if (folder_empty == 1) {
 		/* Find files */
 		check_files();
+        DBG("Checking empty folder start for: files");
 		file = files;
 		while (file != NULL) {
 			if (file->parent_id == folder_id) {
@@ -1105,14 +1125,16 @@ mtpfs_rename (const char *oldname, const char *newname)
 			}
 			file = file->next;
 		}
+        DBG("Checking empty folder end for: files. Result: %s", (folder_empty == 1 ? "empty" : "not empty"));
+
 
 		/* Rename folder. First remove old folder, then create the new one */
 		if (folder_empty == 1) {
 			struct stat stbuf;
-			if ( (ret = mtpfs_getattr (oldname, &stbuf)) == 0) {
+            if ( (ret = mtpfs_getattr_real (oldname, &stbuf)) == 0) {
 				DBG("removing folder %s, id %d", oldname, folder_id);
 
-				ret = mtpfs_mkdir (newname, stbuf.st_mode);
+				ret = mtpfs_mkdir_real (newname, stbuf.st_mode);
 				folders_changed=TRUE;
 				LIBMTP_Delete_Object(device, folder_id);
 				folders_changed=TRUE;
