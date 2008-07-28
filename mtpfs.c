@@ -253,8 +253,8 @@ find_filetype (const gchar * filename)
                !strcasecmp (ptype, "sys")) {
         filetype = LIBMTP_FILETYPE_WINEXEC;
     } else {
-        g_error("Sorry, file type \"%s\" is not yet supported\n", ptype);
-        g_error("Tagging as unknown file type.\n");
+        g_warning("Sorry, file type \"%s\" is not yet supported\n", ptype);
+        g_warning("Tagging as unknown file type.\n");
         filetype = LIBMTP_FILETYPE_UNKNOWN;
     }
 	g_free (ptype);
