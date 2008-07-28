@@ -8,8 +8,6 @@
 
 #include <mtpfs.h>
 
-#define DEBUG 1
-
 #if DEBUG
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -64,7 +62,7 @@ check_files ()
         files = newfiles;
         newfiles = NULL;
         files_changed = FALSE;
-	check_lost_files ();
+        check_lost_files ();
         DBG("Refreshing Filelist exiting");
     }
 }
