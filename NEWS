@@ -1,3 +1,7 @@
+What's new in 0.9
+-----------------
+* Support libmtp 0.3.0
+
 What's new in 0.8
 -----------------
 * Many memory leaks fixed
