@@ -188,7 +188,7 @@ save_playlist (const char *path, struct fuse_file_info *fi)
         ret = LIBMTP_Update_Playlist(device,playlist);
     } else {
         DBG("New playlist");
-        ret = LIBMTP_Create_New_Playlist(device,playlist,0);
+        ret = LIBMTP_Create_New_Playlist(device,playlist);
     }
     playlists_changed=TRUE;
     return ret;
@@ -460,6 +460,8 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->genre = getGenre (tag);
                 genfile->date = getYear (tag);
                 genfile->usecount = 0;
+                genfile->parent_id = 0;
+                genfile->storage_id = 0;
 
                 /* If there is a songlength tag it will take
                  * precedence over any length calculated from
@@ -497,8 +499,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 //DBG("%d:%d:%d",fi->fh,genfile->duration,genfile->filesize);
                 ret =
                     LIBMTP_Send_Track_From_File_Descriptor (device, fi->fh,
-						genfile, NULL, NULL,
-						parent_id);
+						genfile, NULL, NULL);
                 id3_file_close (id3_fh);
                 LIBMTP_destroy_track_t (genfile);
                 DBG("Sent TRACK %s",path);
@@ -512,8 +513,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
     
                 ret =
                     LIBMTP_Send_File_From_File_Descriptor (device, fi->fh,
-						genfile, NULL, NULL,
-						parent_id);
+						genfile, NULL, NULL);
                 LIBMTP_destroy_file_t (genfile);
                 DBG("Sent FILE %s",path);
             }
@@ -987,7 +987,7 @@ mtpfs_mkdir_real (const char *path, mode_t mode)
             }
         }
         DBG("%s:%s:%d", filename, directory, parent_id);
-        ret = LIBMTP_Create_Folder (device, filename, parent_id);
+        ret = LIBMTP_Create_Folder (device, filename, parent_id,0);
         g_strfreev (fields);
 		g_free (directory);
 		g_free (filename);
