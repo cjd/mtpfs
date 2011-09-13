@@ -391,16 +391,14 @@ parse_path (const gchar * path)
                 check_files();
                 file = files;
                 while (file != NULL) {
-			if (file->parent_id == folder_id) {
-				if (file->filename == NULL) DBG("MTPFS filename NULL");
-
-				if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
-					DBG("found:%d:%s", file->item_id, file->filename);
-
-					item_id = file->item_id;
-					break; // found!
-				}
-			}
+                    if (file->parent_id == folder_id) {
+                        if (file->filename == NULL) DBG("MTPFS filename NULL");
+                            if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
+                                DBG("found:%d:%s", file->item_id, file->filename);
+                                item_id = file->item_id;
+                                break; // found!
+                        }
+                    }
                     file = file->next;
                 }
                 if (item_id < 0) {
@@ -706,7 +704,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     stbuf->st_uid = fc->uid;
     stbuf->st_gid = fc->gid;
 
-    // Check cached files first
+    // Check cached files first (stuff that hasn't been written to dev yet)
     GSList *item;
     if (myfiles != NULL) {
         item = g_slist_find_custom (myfiles, path, (GCompareFunc) strcmp);
@@ -714,6 +712,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
             stbuf->st_mode = S_IFREG | 0777;
             stbuf->st_size = 0;
             stbuf->st_blocks = 2;
+            stbuf->st_mtime = time(NULL);
             return_unlock(0);
         }
     }
@@ -755,6 +754,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
                 stbuf->st_mode = S_IFREG | 0777;
                 stbuf->st_size = filesize;
                 stbuf->st_blocks = 2;
+                stbuf->st_mtime = time(NULL);
                 return_unlock(0);
             }
             playlist = playlist->next;   
@@ -775,6 +775,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 					(file->filesize % 512 > 0 ? 1 : 0);
 				stbuf->st_nlink = 1;
 				stbuf->st_mode = S_IFREG | 0777;
+                stbuf->st_mtime = file->modificationdate;
 				return_unlock(0);
 			}
 		}
@@ -792,10 +793,12 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
         folder = folders;
         item_id = lookup_folder_id (folder, (gchar *) path, "");
         if (item_id >= 0) {
+            // Must be a folder
             stbuf->st_ino = item_id;
             stbuf->st_mode = S_IFDIR | 0777;
             stbuf->st_nlink = 2;
         } else {
+            // Must be a file
             item_id = parse_path (path);
             LIBMTP_file_t *file;
             DBG("%d:%s", item_id, path);
@@ -810,6 +813,10 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
                         (file->filesize % 512 > 0 ? 1 : 0);
                     stbuf->st_nlink = 1;
                     stbuf->st_mode = S_IFREG | 0777;
+                    DBG("time:%d",file->modificationdate);
+                    stbuf->st_mtime = file->modificationdate;
+                    stbuf->st_ctime = file->modificationdate;
+                    stbuf->st_atime = file->modificationdate;
                     found = TRUE;
                 }
                 file = file->next;
@@ -1244,6 +1251,7 @@ main (int argc, char *argv[])
     return fuse_stat;
 }
 
+#ifdef USEMAD
 /* Private buffer for passing around with libmad */
 typedef struct
 {
@@ -1356,7 +1364,6 @@ int parse_xing(struct xing *xing, struct mad_bitptr ptr, unsigned int bitlen)
 int scan(void const *ptr, ssize_t len)
 {
     int duration = 0;
-    #ifdef USEMAD
     struct mad_stream stream;
     struct mad_header header;
     struct xing xing;
@@ -1465,7 +1472,6 @@ int scan(void const *ptr, ssize_t len)
 
     mad_header_finish(&header);
     mad_stream_finish(&stream);
-    #endif
     return duration;
 }
 
@@ -1518,3 +1524,4 @@ int calc_length(int f)
     return duration;
 }
 
+#endif

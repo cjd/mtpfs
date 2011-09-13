@@ -22,11 +22,13 @@
 
 #include <libmtp.h>
 #include <glib.h>
-#include <id3tag.h>
-#include <mad.h>
 #include <sys/mman.h>
 #include <strings.h>
+#ifdef USEMAD
+#include <mad.h>
+#include <id3tag.h>
 #include "id3read.h"
+#endif
 
 /* Function declarations */
 
