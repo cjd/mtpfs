@@ -114,7 +114,7 @@ getFrameText (struct id3_tag *tag, char *frame_name)
         //printf ("encoding: %d\n", encoding);
     }
 
-    if (frame_name == ID3_FRAME_COMMENT)
+    if (strcmp(frame_name,ID3_FRAME_COMMENT)==0)
         field = id3_frame_field (frame, 3);
     else
         field = id3_frame_field (frame, 1);
@@ -124,7 +124,7 @@ getFrameText (struct id3_tag *tag, char *frame_name)
     if (!field)
         return NULL;
 
-    if (frame_name == ID3_FRAME_COMMENT)
+    if (strcmp(frame_name,ID3_FRAME_COMMENT)==0)
         string = id3_field_getfullstring (field);
     else
         string = id3_field_getstrings (field, 0);
@@ -134,7 +134,7 @@ getFrameText (struct id3_tag *tag, char *frame_name)
     if (!string)
         return NULL;
 
-    if (frame_name == ID3_FRAME_GENRE)
+    if (strcmp(frame_name,ID3_FRAME_GENRE) == 0)
         string = id3_genre_name (string);
 
     if (encoding == ID3_FIELD_TEXTENCODING_ISO_8859_1) {
@@ -269,7 +269,7 @@ getTracknum (struct id3_tag *tag)
         if (strlen (trackstr) == 1) {
             strcat (trackno, "0");
         }
-        strncat (trackno, trackstr, sizeof (trackno));
+        strncat (trackno, trackstr, sizeof (trackno)-strlen(trackno)-1);
         g_free (trackstr);
         g_free (posstr);
     } else {

@@ -205,6 +205,7 @@ find_filetype (const gchar * filename)
     ptype = g_strdup (fields[g_strv_length (fields) - 1]);
     g_strfreev (fields);
     LIBMTP_filetype_t filetype;
+    
     // This need to be kept constantly updated as new file types arrive.
     if (!strcasecmp (ptype, "wav")) {
         filetype = LIBMTP_FILETYPE_WAV;
@@ -214,6 +215,8 @@ find_filetype (const gchar * filename)
         filetype = LIBMTP_FILETYPE_WMA;
     } else if (!strcasecmp (ptype, "ogg")) {
         filetype = LIBMTP_FILETYPE_OGG;
+    } else if (!strcasecmp (ptype, "aa")) {
+        filetype = LIBMTP_FILETYPE_AUDIBLE;
     } else if (!strcasecmp (ptype, "mp4")) {
         filetype = LIBMTP_FILETYPE_MP4;
     } else if (!strcasecmp (ptype, "wmv")) {
@@ -250,6 +253,34 @@ find_filetype (const gchar * filename)
                !strcasecmp (ptype, "bat") || !strcasecmp (ptype, "dll") ||
                !strcasecmp (ptype, "sys")) {
         filetype = LIBMTP_FILETYPE_WINEXEC;
+    } else if (!strcasecmp (ptype, "txt")) {
+        filetype = LIBMTP_FILETYPE_TEXT;
+    } else if (!strcasecmp (ptype, "htm") || !strcasecmp (ptype, "html") ) {
+        filetype = LIBMTP_FILETYPE_HTML;
+    } else if (!strcasecmp (ptype, "bin")) {
+        filetype = LIBMTP_FILETYPE_FIRMWARE;
+    } else if (!strcasecmp (ptype, "aac")) {
+        filetype = LIBMTP_FILETYPE_AAC;
+    } else if (!strcasecmp (ptype, "flac") || !strcasecmp (ptype, "fla")) {
+        filetype = LIBMTP_FILETYPE_FLAC;
+    } else if (!strcasecmp (ptype, "mp2")) {
+        filetype = LIBMTP_FILETYPE_MP2;
+    } else if (!strcasecmp (ptype, "m4a")) {
+        filetype = LIBMTP_FILETYPE_M4A;
+    } else if (!strcasecmp (ptype, "doc")) {
+        filetype = LIBMTP_FILETYPE_DOC;
+    } else if (!strcasecmp (ptype, "xml")) {
+        filetype = LIBMTP_FILETYPE_XML;
+    } else if (!strcasecmp (ptype, "xls")) {
+        filetype = LIBMTP_FILETYPE_XLS;
+    } else if (!strcasecmp (ptype, "ppt")) {
+        filetype = LIBMTP_FILETYPE_PPT;
+    } else if (!strcasecmp (ptype, "mht")) {
+        filetype = LIBMTP_FILETYPE_MHT;
+    } else if (!strcasecmp (ptype, "jp2")) {
+        filetype = LIBMTP_FILETYPE_JP2;
+    } else if (!strcasecmp (ptype, "jpx")) {
+        filetype = LIBMTP_FILETYPE_JPX;
     } else {
         g_warning("Sorry, file type \"%s\" is not yet supported\n", ptype);
         g_warning("Tagging as unknown file type.\n");
@@ -262,7 +293,7 @@ find_filetype (const gchar * filename)
 static int
 lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
 {
-    //DBG("lookup_folder_id");
+    DBG("lookup_folder_id %s,%s",parent,path);
     int ret = -1;
     if (folderlist == NULL) {
         return -1;
@@ -439,9 +470,10 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             filesize = (uint64_t) st.st_size;
     
             // Setup file
+            int ret;
             LIBMTP_filetype_t filetype;
             filetype = find_filetype (filename);
-            int ret;
+            #ifdef USEMAD
             if (filetype == LIBMTP_FILETYPE_MP3) {
                 LIBMTP_track_t *genfile;
                 genfile = LIBMTP_new_track_t ();
@@ -504,6 +536,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 LIBMTP_destroy_track_t (genfile);
                 DBG("Sent TRACK %s",path);
             } else {
+            #endif
                 LIBMTP_file_t *genfile;
                 genfile = LIBMTP_new_file_t ();
                 genfile->filesize = filesize;
@@ -516,7 +549,9 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
 						genfile, NULL, NULL);
                 LIBMTP_destroy_file_t (genfile);
                 DBG("Sent FILE %s",path);
+            #ifdef USEMAD
             }
+            #endif
             if (ret == 0)
                 DBG("Sent %s",path);
             // Cleanup
@@ -529,7 +564,6 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             close (fi->fh);
             // Refresh filelist
             files_changed = TRUE;
-            //files = LIBMTP_Get_Filelisting(device);
             return_unlock(ret);
         }
     }
@@ -544,7 +578,7 @@ mtpfs_destroy ()
     if (files) free_files(files);
     if (folders) LIBMTP_destroy_folder_t(folders);
     if (playlists) free_playlists(playlists);
-    LIBMTP_Release_Device (device);
+    if (device) LIBMTP_Release_Device (device);
     return_unlock();
 }
 
@@ -1157,22 +1191,16 @@ mtpfs_statfs (const char *path, struct statfs *stbuf)
 void *
 mtpfs_init ()
 {
+    LIBMTP_devicestorage_t *storage;
     DBG("mtpfs_init");
-    LIBMTP_Init ();
-    device = LIBMTP_Get_First_Device ();
-    if (device == NULL) {
-        DBG("No devices.");
-        exit (1);
-    }
-    if (!g_thread_supported ()) g_thread_init(NULL);
-    device_lock = g_mutex_new ();
+    LIBMTP_Get_Storage(device, LIBMTP_STORAGE_SORTBY_NOTSORTED);
     files_changed=TRUE;
     folders_changed=TRUE;
     playlists_changed=TRUE;
     //DBG("Get Folder List");
-    //folders = LIBMTP_Get_Folder_List (device);
+    //folders = LIBMTP_Get_Folder_List_For_Storage (device,storage->id);
     //DBG("Get File List");
-    //files = LIBMTP_Get_Filelisting (device);
+    //files = LIBMTP_Get_Filelisting_With_Callback (device, NULL, NULL);
     //DBG("Get Playlists");
     //playlists = LIBMTP_Get_Playlist_List(device);
     DBG("Ready");
@@ -1199,8 +1227,21 @@ static struct fuse_operations mtpfs_oper = {
 int
 main (int argc, char *argv[])
 {
+    int fuse_stat;
     umask (0);
-    return fuse_main (argc, argv, &mtpfs_oper);
+    LIBMTP_Init ();
+    device = LIBMTP_Get_First_Device ();
+    if (device == NULL) {
+        DBG("No devices.");
+        exit(1);
+    }
+    if (!g_thread_supported ()) g_thread_init(NULL);
+    device_lock = g_mutex_new ();
+    DBG("Start fuse");
+
+    fuse_stat=fuse_main (argc, argv, &mtpfs_oper);
+    DBG("fuse_main returned %d\n", fuse_stat);
+    return fuse_stat;
 }
 
 /* Private buffer for passing around with libmad */
@@ -1314,17 +1355,16 @@ int parse_xing(struct xing *xing, struct mad_bitptr ptr, unsigned int bitlen)
 
 int scan(void const *ptr, ssize_t len)
 {
+    int duration = 0;
+    #ifdef USEMAD
     struct mad_stream stream;
     struct mad_header header;
     struct xing xing;
     xing.frames=0;
-    DBG("scan: %d",len);
-
 
     unsigned long bitrate = 0;
     int has_xing = 0;
     int is_vbr = 0;
-    int duration = 0;
     mad_stream_init(&stream);
     mad_header_init(&header);
 
@@ -1425,6 +1465,7 @@ int scan(void const *ptr, ssize_t len)
 
     mad_header_finish(&header);
     mad_stream_finish(&stream);
+    #endif
     return duration;
 }
 
