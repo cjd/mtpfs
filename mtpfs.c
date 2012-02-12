@@ -176,7 +176,7 @@ save_playlist (const char *path, struct fuse_file_info *fi)
     check_playlists();
     tmp_playlist=playlists;
     while (tmp_playlist != NULL){
-        if (strcasecmp(tmp_playlist->name,playlist_name) == 0){
+        if (g_ascii_strcasecmp(tmp_playlist->name,playlist_name) == 0){
             playlist_id=playlist->playlist_id;
         }
         tmp_playlist=tmp_playlist->next;
@@ -207,79 +207,79 @@ find_filetype (const gchar * filename)
     LIBMTP_filetype_t filetype;
     
     // This need to be kept constantly updated as new file types arrive.
-    if (!strcasecmp (ptype, "wav")) {
+    if (!g_ascii_strncasecmp (ptype, "wav",3)) {
         filetype = LIBMTP_FILETYPE_WAV;
-    } else if (!strcasecmp (ptype, "mp3")) {
+    } else if (!g_ascii_strncasecmp (ptype, "mp3",3)) {
         filetype = LIBMTP_FILETYPE_MP3;
-    } else if (!strcasecmp (ptype, "wma")) {
+    } else if (!g_ascii_strncasecmp (ptype, "wma",3)) {
         filetype = LIBMTP_FILETYPE_WMA;
-    } else if (!strcasecmp (ptype, "ogg")) {
+    } else if (!g_ascii_strncasecmp (ptype, "ogg",3)) {
         filetype = LIBMTP_FILETYPE_OGG;
-    } else if (!strcasecmp (ptype, "aa")) {
+    } else if (!g_ascii_strncasecmp (ptype, "aa",2)) {
         filetype = LIBMTP_FILETYPE_AUDIBLE;
-    } else if (!strcasecmp (ptype, "mp4")) {
+    } else if (!g_ascii_strncasecmp (ptype, "mp4",3)) {
         filetype = LIBMTP_FILETYPE_MP4;
-    } else if (!strcasecmp (ptype, "wmv")) {
+    } else if (!g_ascii_strncasecmp (ptype, "wmv",3)) {
         filetype = LIBMTP_FILETYPE_WMV;
-    } else if (!strcasecmp (ptype, "avi")) {
+    } else if (!g_ascii_strncasecmp (ptype, "avi",3)) {
         filetype = LIBMTP_FILETYPE_AVI;
-    } else if (!strcasecmp (ptype, "mpeg") || !strcasecmp (ptype, "mpg")) {
+    } else if (!g_ascii_strncasecmp (ptype, "mpeg",4) || !g_ascii_strncasecmp (ptype, "mpg",3)) {
         filetype = LIBMTP_FILETYPE_MPEG;
-    } else if (!strcasecmp (ptype, "asf")) {
+    } else if (!g_ascii_strncasecmp (ptype, "asf",3)) {
         filetype = LIBMTP_FILETYPE_ASF;
-    } else if (!strcasecmp (ptype, "qt") || !strcasecmp (ptype, "mov")) {
+    } else if (!g_ascii_strncasecmp (ptype, "qt",2) || !g_ascii_strncasecmp (ptype, "mov",3)) {
         filetype = LIBMTP_FILETYPE_QT;
-    } else if (!strcasecmp (ptype, "wma")) {
+    } else if (!g_ascii_strncasecmp (ptype, "wma",3)) {
         filetype = LIBMTP_FILETYPE_WMA;
-    } else if (!strcasecmp (ptype, "jpg") || !strcasecmp (ptype, "jpeg")) {
+    } else if (!g_ascii_strncasecmp (ptype, "jpg",3) || !g_ascii_strncasecmp (ptype, "jpeg",4)) {
         filetype = LIBMTP_FILETYPE_JPEG;
-    } else if (!strcasecmp (ptype, "jfif")) {
+    } else if (!g_ascii_strncasecmp (ptype, "jfif",4)) {
         filetype = LIBMTP_FILETYPE_JFIF;
-    } else if (!strcasecmp (ptype, "tif") || !strcasecmp (ptype, "tiff")) {
+    } else if (!g_ascii_strncasecmp (ptype, "tif",3) || !g_ascii_strncasecmp (ptype, "tiff",4)) {
         filetype = LIBMTP_FILETYPE_TIFF;
-    } else if (!strcasecmp (ptype, "bmp")) {
+    } else if (!g_ascii_strncasecmp (ptype, "bmp",3)) {
         filetype = LIBMTP_FILETYPE_BMP;
-    } else if (!strcasecmp (ptype, "gif")) {
+    } else if (!g_ascii_strncasecmp (ptype, "gif",3)) {
         filetype = LIBMTP_FILETYPE_GIF;
-    } else if (!strcasecmp (ptype, "pic") || !strcasecmp (ptype, "pict")) {
+    } else if (!g_ascii_strncasecmp (ptype, "pic",3) || !g_ascii_strncasecmp (ptype, "pict",4)) {
         filetype = LIBMTP_FILETYPE_PICT;
-    } else if (!strcasecmp (ptype, "png")) {
+    } else if (!g_ascii_strncasecmp (ptype, "png",3)) {
         filetype = LIBMTP_FILETYPE_PNG;
-    } else if (!strcasecmp (ptype, "wmf")) {
+    } else if (!g_ascii_strncasecmp (ptype, "wmf",3)) {
         filetype = LIBMTP_FILETYPE_WINDOWSIMAGEFORMAT;
-    } else if (!strcasecmp (ptype, "ics")) {
+    } else if (!g_ascii_strncasecmp (ptype, "ics",3)) {
         filetype = LIBMTP_FILETYPE_VCALENDAR2;
-    } else if (!strcasecmp (ptype, "exe") || !strcasecmp (ptype, "com") ||
-               !strcasecmp (ptype, "bat") || !strcasecmp (ptype, "dll") ||
-               !strcasecmp (ptype, "sys")) {
+    } else if (!g_ascii_strncasecmp (ptype, "exe",3) || !g_ascii_strncasecmp (ptype, "com",3) ||
+               !g_ascii_strncasecmp (ptype, "bat",3) || !g_ascii_strncasecmp (ptype, "dll",3) ||
+               !g_ascii_strncasecmp (ptype, "sys",3)) {
         filetype = LIBMTP_FILETYPE_WINEXEC;
-    } else if (!strcasecmp (ptype, "txt")) {
+    } else if (!g_ascii_strncasecmp (ptype, "txt",3)) {
         filetype = LIBMTP_FILETYPE_TEXT;
-    } else if (!strcasecmp (ptype, "htm") || !strcasecmp (ptype, "html") ) {
+    } else if (!g_ascii_strncasecmp (ptype, "htm",3) || !g_ascii_strncasecmp (ptype, "html",4) ) {
         filetype = LIBMTP_FILETYPE_HTML;
-    } else if (!strcasecmp (ptype, "bin")) {
+    } else if (!g_ascii_strncasecmp (ptype, "bin",3)) {
         filetype = LIBMTP_FILETYPE_FIRMWARE;
-    } else if (!strcasecmp (ptype, "aac")) {
+    } else if (!g_ascii_strncasecmp (ptype, "aac",3)) {
         filetype = LIBMTP_FILETYPE_AAC;
-    } else if (!strcasecmp (ptype, "flac") || !strcasecmp (ptype, "fla")) {
+    } else if (!g_ascii_strncasecmp (ptype, "flac",4) || !g_ascii_strncasecmp (ptype, "fla",3)) {
         filetype = LIBMTP_FILETYPE_FLAC;
-    } else if (!strcasecmp (ptype, "mp2")) {
+    } else if (!g_ascii_strncasecmp (ptype, "mp2",3)) {
         filetype = LIBMTP_FILETYPE_MP2;
-    } else if (!strcasecmp (ptype, "m4a")) {
+    } else if (!g_ascii_strncasecmp (ptype, "m4a",3)) {
         filetype = LIBMTP_FILETYPE_M4A;
-    } else if (!strcasecmp (ptype, "doc")) {
+    } else if (!g_ascii_strncasecmp (ptype, "doc",3)) {
         filetype = LIBMTP_FILETYPE_DOC;
-    } else if (!strcasecmp (ptype, "xml")) {
+    } else if (!g_ascii_strncasecmp (ptype, "xml",3)) {
         filetype = LIBMTP_FILETYPE_XML;
-    } else if (!strcasecmp (ptype, "xls")) {
+    } else if (!g_ascii_strncasecmp (ptype, "xls",3)) {
         filetype = LIBMTP_FILETYPE_XLS;
-    } else if (!strcasecmp (ptype, "ppt")) {
+    } else if (!g_ascii_strncasecmp (ptype, "ppt",3)) {
         filetype = LIBMTP_FILETYPE_PPT;
-    } else if (!strcasecmp (ptype, "mht")) {
+    } else if (!g_ascii_strncasecmp (ptype, "mht",3)) {
         filetype = LIBMTP_FILETYPE_MHT;
-    } else if (!strcasecmp (ptype, "jp2")) {
+    } else if (!g_ascii_strncasecmp (ptype, "jp2",3)) {
         filetype = LIBMTP_FILETYPE_JP2;
-    } else if (!strcasecmp (ptype, "jpx")) {
+    } else if (!g_ascii_strncasecmp (ptype, "jpx",3)) {
         filetype = LIBMTP_FILETYPE_JPX;
     } else {
         g_warning("Sorry, file type \"%s\" is not yet supported\n", ptype);
@@ -301,9 +301,9 @@ lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
     check_folders();
     gchar *current;
     current = g_strconcat(parent, "/", folderlist->name,NULL);
-    if (strcasecmp (path, current) == 0) {
+    if (g_ascii_strcasecmp (path, current) == 0) {
         ret = folderlist->folder_id;
-    } else if (strncasecmp (path, current, strlen (current)) == 0) {
+    } else if (g_ascii_strncasecmp (path, current, strlen (current)) == 0) {
         ret = lookup_folder_id (folderlist->child, path, current);
     }
 
@@ -337,7 +337,7 @@ parse_path (const gchar * path)
         while (playlist != NULL) {
             gchar *tmppath;
             tmppath = g_strconcat("/Playlists/",playlist->name,".m3u",NULL);
-            if (g_strcasecmp(path,tmppath) == 0) {
+            if (g_ascii_strcasecmp(path,tmppath) == 0) {
                 res = playlist->playlist_id;
 				g_free (tmppath);
 				break;
@@ -391,14 +391,16 @@ parse_path (const gchar * path)
                 check_files();
                 file = files;
                 while (file != NULL) {
-                    if (file->parent_id == folder_id) {
-                        if (file->filename == NULL) DBG("MTPFS filename NULL");
-                            if (file->filename != NULL && strcasecmp (file->filename, fields[i]) == 0) {
-                                DBG("found:%d:%s", file->item_id, file->filename);
-                                item_id = file->item_id;
-                                break; // found!
-                        }
-                    }
+			if (file->parent_id == folder_id) {
+				if (file->filename == NULL) DBG("MTPFS filename NULL");
+
+				if (file->filename != NULL && g_ascii_strcasecmp (file->filename, fields[i]) == 0) {
+					DBG("found:%d:%s", file->item_id, file->filename);
+
+					item_id = file->item_id;
+					break; // found!
+				}
+			}
                     file = file->next;
                 }
                 if (item_id < 0) {
@@ -490,7 +492,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->genre = getGenre (tag);
                 genfile->date = getYear (tag);
                 genfile->usecount = 0;
-                genfile->parent_id = 0;
+                genfile->parent_id = parent_id;
                 genfile->storage_id = 0;
 
                 /* If there is a songlength tag it will take
@@ -718,22 +720,22 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     }
 
     // Special case directory 'Playlists', 'lost+found'
-    if (path != NULL && (strcasecmp (path, "/Playlists") == 0 || 
-			strcasecmp (path, "/lost+found") == 0)) {
+    if (path != NULL && (g_ascii_strncasecmp (path, "/Playlists",10) == 0 || 
+			g_ascii_strncasecmp (path, "/lost+found",11) == 0)) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
         return_unlock(0);
     }
 
 
-    if (path != NULL && strncasecmp (path, "/Playlists",10) == 0) {
+    if (path != NULL && g_ascii_strncasecmp (path, "/Playlists",10) == 0) {
         LIBMTP_playlist_t *playlist;
         check_playlists();
         playlist=playlists;
         while (playlist != NULL) {
             gchar *tmppath;
             tmppath = g_strconcat("/Playlists/",playlist->name,".m3u",NULL);
-            if (g_strcasecmp(path,tmppath) == 0) {
+            if (g_ascii_strcasecmp(path,tmppath) == 0) {
                 int filesize = 0;
                 int i;
                 for (i=0; i <playlist->no_tracks; i++){
@@ -886,7 +888,7 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
             check_playlists();
             playlist = playlists;
             while (playlist != NULL) {
-                if (strcasecmp(playlist->name,name) == 0 ) {
+                if (g_ascii_strcasecmp(playlist->name,name) == 0 ) {
                     //int playlist_id=playlist->playlist_id;
                     int i;
                     for (i=0; i <playlist->no_tracks; i++){
@@ -1237,13 +1239,66 @@ main (int argc, char *argv[])
     int fuse_stat;
     umask (0);
     LIBMTP_Init ();
-    device = LIBMTP_Get_First_Device ();
-    if (device == NULL) {
-        DBG("No devices.");
-        exit(1);
+    //device = LIBMTP_Get_First_Device ();
+    LIBMTP_mtpdevice_t *device_list, *iter;
+    switch(LIBMTP_Get_Connected_Devices(&device_list))
+    {
+    case LIBMTP_ERROR_NO_DEVICE_ATTACHED:
+        fprintf(stdout, "mtpfs: No Devices have been found\n");
+        return 0;
+    case LIBMTP_ERROR_CONNECTING:
+        fprintf(stderr, "mtpfs: There has been an error connecting. Exit\n");
+        return 1;
+    case LIBMTP_ERROR_MEMORY_ALLOCATION:
+        fprintf(stderr, "mtpfs: Memory Allocation Error. Exit\n");
+        return 1;
+
+    /* Unknown general errors - This should never execute */
+    case LIBMTP_ERROR_GENERAL:
+    default:
+        fprintf(stderr, "mtpfs: Unknown error, please report "
+                        "this to the libmtp developers\n");
+    return 1;
+
+    /* Successfully connected at least one device, so continue */
+    case LIBMTP_ERROR_NONE:
+        fprintf(stdout, "mtpfs: Successfully connected\n");
+        fflush(stdout);
     }
-    if (!g_thread_supported ()) g_thread_init(NULL);
-    device_lock = g_mutex_new ();
+
+    /* iterate through connected MTP devices */
+    for(iter = device_list; iter != NULL; iter = iter->next) {
+        char *friendlyname;
+        /* Echo the friendly name so we know which device we are working with */
+        friendlyname = LIBMTP_Get_Friendlyname(iter);
+        if (friendlyname == NULL) {
+            printf("Listing File Information on Device with name: (NULL)\n");
+        } else {
+            printf("Listing File Information on Device with name: %s\n", friendlyname);
+            g_free(friendlyname);
+        }
+    }
+
+    device = device_list;
+    /* Get all storages for this device */
+    int ret = LIBMTP_Get_Storage(device, LIBMTP_STORAGE_SORTBY_NOTSORTED);
+    if (ret != 0) {
+        fprintf(stdout,"LIBMTP_Get_Storage() failed:%d\n",ret);
+        LIBMTP_Dump_Errorstack(device);
+        LIBMTP_Clear_Errorstack(device);
+    }
+
+    /* Check if multiple storage areas */
+    if (device->storage->next != 0) {
+        DBG("Multiple storage areas found");
+        LIBMTP_devicestorage_t *storage;
+        for (storage = device->storage; storage != 0; storage = storage->next)  {
+            storage_areas = g_slist_append(storage_areas, storage->StorageDescription);
+            DBG("Area: %s", storage->StorageDescription);
+        }
+    }
+
+    g_mutex_init (device_lock);
     DBG("Start fuse");
 
     fuse_stat=fuse_main (argc, argv, &mtpfs_oper);

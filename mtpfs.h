@@ -61,6 +61,7 @@ static LIBMTP_file_t *files = NULL;
 static LIBMTP_playlist_t *playlists = NULL;
 static GSList *myfiles = NULL;
 static GSList *lostfiles = NULL;
+static GSList *storage_areas = NULL;
 static gboolean files_changed = FALSE;
 static gboolean folders_changed = FALSE;
 static gboolean playlists_changed = FALSE;
