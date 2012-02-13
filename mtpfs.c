@@ -815,7 +815,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
                         (file->filesize % 512 > 0 ? 1 : 0);
                     stbuf->st_nlink = 1;
                     stbuf->st_mode = S_IFREG | 0777;
-                    DBG("time:%d",file->modificationdate);
+                    DBG("time:%s",ctime(&(file->modificationdate)));
                     stbuf->st_mtime = file->modificationdate;
                     stbuf->st_ctime = file->modificationdate;
                     stbuf->st_atime = file->modificationdate;

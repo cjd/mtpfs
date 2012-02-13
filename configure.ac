@@ -1,4 +1,4 @@
-AC_INIT([MTPfs], [1.0], [Chris Debenham <chris@adebenham.com>],[mtpfs])
+AC_INIT([MTPfs], [1.1], [Chris Debenham <chris@adebenham.com>],[mtpfs])
 AM_INIT_AUTOMAKE
 AC_PROG_CC
 AM_PROG_CC_C_O
@@ -6,10 +6,13 @@ AC_PROG_INSTALL
 
 PKG_CHECK_MODULES(FUSE, fuse >= 2.2 \
                         glib-2.0 >= 2.6 \
-                        gthread-2.0 >= 1.2 \
-                        libmtp >= 0.0.9)
+                        gthread-2.0 >= 1.2)
 AC_SUBST(FUSE_CFLAGS)
 AC_SUBST(FUSE_LIBS)
+
+PKG_CHECK_MODULES(MTP, libmtp >= 0.0.9)
+AC_SUBST(MTP_CFLAGS)
+AC_SUBST(MTP_LIBS)
 
 PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.6 \
                         gthread-2.0 >= 1.2 \
