@@ -492,7 +492,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             directory = strcpy (directory, "/");
             fields = g_strsplit (path, "/", -1);
             int i;
-            uint32_t parent_id = 0;
+            int parent_id = 0;
             int storageid;
             storageid = find_storage(fields[0]);
             for (i = 0; fields[i] != NULL; i++) {
@@ -541,8 +541,8 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->genre = getGenre (tag);
                 genfile->date = getYear (tag);
                 genfile->usecount = 0;
-                genfile->parent_id = parent_id;
-                genfile->storage_id = 0;
+                genfile->parent_id = (uint32_t) parent_id;
+                genfile->storage_id = storageid;
 
                 /* If there is a songlength tag it will take
                  * precedence over any length calculated from
@@ -591,7 +591,8 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->filesize = filesize;
                 genfile->filetype = filetype;
                 genfile->filename = g_strdup (filename);
-                genfile->parent_id = parent_id;
+                genfile->parent_id = (uint32_t) parent_id;
+                genfile->storage_id = storageArea[storageid].storage->id;
     
                 ret =
                     LIBMTP_Send_File_From_File_Descriptor (device, fi->fh,
