@@ -8,13 +8,15 @@
 
 #include <mtpfs.h>
 
-#if DEBUG
+//#define DEBUG 1
+//#if DEBUG
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-#define DBG(a...) g_debug ( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a);
-#else
-#define DBG(a...)
-#endif
+//#define DBG(a...) g_debug ( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a);
+#define DBG(a...) {g_printf( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a );g_printf("\n");}
+//#else
+//#define DBG(a...)
+//#endif
 
 #if DEBUG
 static void dump_mtp_error()
@@ -26,8 +28,8 @@ static void dump_mtp_error()
 #define dump_mtp_error()
 #endif
 
-#define enter_lock(a...)       do { DBG("lock"); DBG(a); g_mutex_lock(device_lock); } while(0)
-#define return_unlock(a)       do { DBG("return unlock"); g_mutex_unlock(device_lock); return a; } while(0)
+#define enter_lock(a...)       do { DBG("lock"); DBG(a); g_static_mutex_lock(&device_lock); } while(0)
+#define return_unlock(a)       do { DBG("return unlock"); g_static_mutex_unlock(&device_lock); return a; } while(0)
 
 void
 free_files(LIBMTP_file_t *filelist)
@@ -62,7 +64,7 @@ check_files ()
         files = newfiles;
         newfiles = NULL;
         files_changed = FALSE;
-        check_lost_files ();
+        //check_lost_files ();
         DBG("Refreshing Filelist exiting");
     }
 }
@@ -82,10 +84,17 @@ check_lost_files ()
 		gboolean parent_found;
 
 		if (last_parent_id == -1 || last_parent_id != item->parent_id) {
-			if (item->parent_id == 0 || LIBMTP_Find_Folder (folders, item->parent_id) != NULL) {
+			if (item->parent_id == 0) {
 				parent_found = TRUE;
 			} else {
-				parent_found = FALSE;
+                int i;
+                for (i=0;i<4;i++) {
+                    if (storageArea[i].folders!=NULL) {
+                        if (LIBMTP_Find_Folder (storageArea[i].folders, item->parent_id) != NULL) {
+				            parent_found = FALSE;
+                        }
+                    }
+                }
 			}
 			last_parent_id = item->parent_id;
 			last_parent_found = parent_found;
@@ -103,16 +112,19 @@ check_lost_files ()
 void
 check_folders ()
 {
-    if (folders_changed) {
-        DBG("Refreshing Folderlist");
-        LIBMTP_folder_t *newfolders = NULL;
-        if (folders) {
-            LIBMTP_destroy_folder_t(folders);
+    int i;
+    for (i=0;i<4;i++) {
+        if (storageArea[i].folders_changed) {
+            DBG("Refreshing Folderlist %d-%s", i,storageArea[i].storage->StorageDescription);
+            LIBMTP_folder_t *newfolders = NULL;
+            if (storageArea[i].folders) {
+                LIBMTP_destroy_folder_t(storageArea[i].folders);
+            }
+            newfolders = LIBMTP_Get_Folder_List_For_Storage(device,storageArea[i].storage->id);
+            storageArea[i].folders = newfolders;
+            newfolders = NULL;
+            storageArea[i].folders_changed= FALSE;
         }
-        newfolders = LIBMTP_Get_Folder_List(device);
-        folders = newfolders;
-        newfolders = NULL;
-        folders_changed= FALSE;
     }
 }
 
@@ -291,24 +303,58 @@ find_filetype (const gchar * filename)
 }
 
 static int
+find_storage(const gchar * path)
+{
+    int i;
+    DBG("find_storage:%s",path);
+    for (i=0;i<4;i++) {
+        if (storageArea[i].storage != NULL) {
+            int maxlen = strlen(storageArea[i].storage->StorageDescription);
+            if (strlen(path+1) < maxlen) maxlen = strlen(path+1);
+            if (strncmp(storageArea[i].storage->StorageDescription,path+1,maxlen)==0) {
+                DBG("%s found as %d",storageArea[i].storage->StorageDescription,i);
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+static int
 lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent)
 {
-    DBG("lookup_folder_id %s,%s",parent,path);
+    DBG("lookup_folder_id %s,%s",path, parent);
     int ret = -1;
     if (folderlist == NULL) {
         return -1;
     }
+    gchar * mypath;
+    mypath=path;
     check_folders();
+    if (parent==NULL) {
+        if (g_strrstr(path+1,"/") == NULL) {
+            DBG("Storage dir");
+            return -2;
+        } else {
+            DBG("Strip storage area name"); 
+            mypath=strstr(path+1,"/");
+            parent="";
+        }
+    }
+
     gchar *current;
     current = g_strconcat(parent, "/", folderlist->name,NULL);
-    if (g_ascii_strcasecmp (path, current) == 0) {
+    LIBMTP_devicestorage_t *storage;
+
+    DBG("compare %s,%s",mypath, current);
+    if (g_ascii_strcasecmp (mypath, current) == 0) {
         ret = folderlist->folder_id;
-    } else if (g_ascii_strncasecmp (path, current, strlen (current)) == 0) {
-        ret = lookup_folder_id (folderlist->child, path, current);
+    } else if (g_ascii_strncasecmp (mypath, current, strlen (current)) == 0) {
+        ret = lookup_folder_id (folderlist->child, mypath, current);
     }
 
     if (ret == -1) {
-		ret = lookup_folder_id (folderlist->sibling, path, parent);
+		ret = lookup_folder_id (folderlist->sibling, mypath, parent);
 	}
     g_free(current);
     return ret;
@@ -374,6 +420,8 @@ parse_path (const gchar * path)
     directory = strcpy (directory, "");
     fields = g_strsplit (path, "/", -1);
     res = -ENOENT;
+    int storageid;
+    storageid = find_storage(path);
     for (i = 0; fields[i] != NULL; i++) {
         if (strlen (fields[i]) > 0) {
             if (fields[i + 1] != NULL) {
@@ -381,45 +429,44 @@ parse_path (const gchar * path)
                 directory = strcat (directory, fields[i]);
             } else {
                 check_folders();
-                folder = folders;
+                folder = storageArea[storageid].folders;
                 int folder_id = 0;
                 if (strcmp (directory, "") != 0) {
-                    folder_id = lookup_folder_id (folder, directory, "");
+                    folder_id = lookup_folder_id (folder, directory, NULL);
                 }
                 DBG("parent id:%d:%s", folder_id, directory);
                 LIBMTP_file_t *file;
                 check_files();
                 file = files;
                 while (file != NULL) {
-			if (file->parent_id == folder_id) {
-				if (file->filename == NULL) DBG("MTPFS filename NULL");
+			        if ((file->parent_id == folder_id) ||
+                       (folder_id==-2 && (file->parent_id == 0) && (file->storage_id == storageArea[storageid].storage->id))) {
+				        if (file->filename == NULL) DBG("MTPFS filename NULL");
+				        if (file->filename != NULL && g_ascii_strcasecmp (file->filename, fields[i]) == 0) {
+					    DBG("found:%d:%s", file->item_id, file->filename);
 
-				if (file->filename != NULL && g_ascii_strcasecmp (file->filename, fields[i]) == 0) {
-					DBG("found:%d:%s", file->item_id, file->filename);
-
-					item_id = file->item_id;
-					break; // found!
-				}
+					    item_id = file->item_id;
+					    break; // found!
+				    }
+			    }
+                file = file->next;
+            }
+            if (item_id < 0) {
+                directory = strcat (directory, "/");
+                directory = strcat (directory, fields[i]);
+                item_id = lookup_folder_id (folder, directory, NULL);
+                res = item_id;
+				break;
+            } else {
+                res = item_id;
+				break;
 			}
-                    file = file->next;
-                }
-                if (item_id < 0) {
-                    directory = strcat (directory, fields[i]);
-                    item_id = lookup_folder_id (folder, directory, "");
-                    res = item_id;
-					break;
-                }
-				else
-				{
-					res = item_id;
-					break;
-				}
             }
         }
     }
 	g_free (directory);
     g_strfreev (fields);
-    DBG("parse_path exiting:%s",path);
+    DBG("parse_path exiting:%s - %d",path,res);
     return res;
 }
 
@@ -446,11 +493,13 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             fields = g_strsplit (path, "/", -1);
             int i;
             uint32_t parent_id = 0;
+            int storageid;
+            storageid = find_storage(fields[0]);
             for (i = 0; fields[i] != NULL; i++) {
                 if (strlen (fields[i]) > 0) {
                     if (fields[i + 1] == NULL) {
                         gchar *tmp = g_strndup (directory, strlen (directory) - 1);
-                        parent_id = lookup_folder_id (folders, tmp, "");
+                        parent_id = lookup_folder_id (storageArea[storageid].folders, tmp, NULL);
 						g_free (tmp);
                         if (parent_id < 0)
                             parent_id = 0;
@@ -576,7 +625,10 @@ mtpfs_destroy ()
 {
     enter_lock("destroy");
     if (files) free_files(files);
-    if (folders) LIBMTP_destroy_folder_t(folders);
+    int i;
+    for (i=0;i<4;i++) {
+        if (storageArea[i].folders) LIBMTP_destroy_folder_t(storageArea[i].folders);
+    }
     if (playlists) free_playlists(playlists);
     if (device) LIBMTP_Release_Device (device);
     return_unlock();
@@ -592,6 +644,25 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
     // Add common entries
     filler (buf, ".", NULL, 0);
     filler (buf, "..", NULL, 0);
+
+    // If in root directory
+    if (strcmp(path,"/") == 0) {
+        filler (buf, "Playlists", NULL, 0);
+		if (lostfiles != NULL) {
+			filler (buf, "lost+found", NULL, 0);
+		}
+        LIBMTP_devicestorage_t *storage;
+        for (storage = device->storage; storage != 0; storage = storage->next) {
+            struct stat st;
+            memset (&st, 0, sizeof (st));
+            st.st_nlink = 2;
+            st.st_ino = storage->id;
+            st.st_mode = S_IFREG | 0555;
+            gchar *name;
+            filler (buf, storage->StorageDescription, &st, 0);
+        }
+		return_unlock(0);
+    }
 
     // Are we looking at the playlists?
     if (strncmp (path, "/Playlists",10) == 0) {
@@ -636,31 +707,32 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
 		return_unlock(0);
     }
 
+    // Get storage area
+    int i;
+    int storageid = -1;
+    storageid=find_storage(path);
     // Get folder listing.
     int folder_id = 0;
     if (strcmp (path, "/") != 0) {
         check_folders();
-        folder = folders;
-        folder_id = lookup_folder_id (folder, (gchar *) path, "");
+        folder_id = lookup_folder_id (storageArea[storageid].folders, (gchar *) path, NULL);
     }
 
-    if (folder_id == 0) {
-        filler (buf, "Playlists", NULL, 0);
-        check_folders();
-        folder = folders;
-		/* lost+found */
-		if (lostfiles != NULL) {
-			filler (buf, "lost+found", NULL, 0);
-		}
+    DBG("Checking folders for %d",storageid);
+    check_folders();
+    if (folder_id==-2) {
+        DBG("Root of storage area");
+        folder=storageArea[storageid].folders;
     } else {
-        check_folders();
-        folder = LIBMTP_Find_Folder (folders, folder_id);
+        folder = LIBMTP_Find_Folder (storageArea[storageid].folders, folder_id);
+        if (folder == NULL) return_unlock(0);
         folder = folder->child;
     }
+    if (folder == NULL) return_unlock(0);
 
-    DBG("Checking folders");
     while (folder != NULL) {
-        if (folder->parent_id == folder_id) {
+        if ((folder->parent_id == folder_id) ||
+           (folder_id==-2 && (folder->storage_id == storageArea[storageid].storage->id))) {
 			DBG("found folder: %s, id %d", folder->name, folder->folder_id);
             struct stat st;
             memset (&st, 0, sizeof (st));
@@ -679,7 +751,8 @@ mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler,
     check_files();
     file = files;
     while (file != NULL) {
-        if (file->parent_id == folder_id) {
+        if ((file->parent_id == folder_id) ||
+           (folder_id==-2 && (file->parent_id == 0) && (file->storage_id == storageArea[storageid].storage->id))) {
             struct stat st;
             memset (&st, 0, sizeof (st));
             st.st_ino = file->item_id;
@@ -698,6 +771,7 @@ static int
 mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 {
     int ret = 0;
+    if (path==NULL) return_unlock(-ENOENT);
     memset (stbuf, 0, sizeof (struct stat));
 
     // Set uid/gid of file
@@ -705,6 +779,11 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     fc = fuse_get_context();
     stbuf->st_uid = fc->uid;
     stbuf->st_gid = fc->gid;
+    if (strcmp (path, "/") == 0) {
+        stbuf->st_mode = S_IFDIR | 0777;
+        stbuf->st_nlink = 2;
+        return_unlock(0);
+    }
 
     // Check cached files first (stuff that hasn't been written to dev yet)
     GSList *item;
@@ -720,15 +799,17 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     }
 
     // Special case directory 'Playlists', 'lost+found'
-    if (path != NULL && (g_ascii_strncasecmp (path, "/Playlists",10) == 0 || 
-			g_ascii_strncasecmp (path, "/lost+found",11) == 0)) {
+    // Special case root directory items
+    if (g_strrstr(path+1,"/") == NULL) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
         return_unlock(0);
     }
 
+    int storageid;
+    storageid=find_storage(path);
 
-    if (path != NULL && g_ascii_strncasecmp (path, "/Playlists",10) == 0) {
+    if (g_ascii_strncasecmp (path, "/Playlists",10) == 0) {
         LIBMTP_playlist_t *playlist;
         check_playlists();
         playlist=playlists;
@@ -747,7 +828,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
                         filesize = filesize + strlen(file->filename) + 2;
                         while (parent_id != 0) {
                             check_folders();
-                            folder = LIBMTP_Find_Folder(folders,parent_id);
+                            folder = LIBMTP_Find_Folder(storageArea[i].folders,parent_id);
                             parent_id = folder->parent_id;
                             filesize = filesize + strlen(folder->name) + 1;
                         }
@@ -764,7 +845,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
         return_unlock(-ENOENT);
     }
 
-    if (path != NULL && strncasecmp (path, "/lost+found",11) == 0) {
+    if (strncasecmp (path, "/lost+found",11) == 0) {
 		GSList *item;
 		int item_id = parse_path (path);
 		for (item = lostfiles; item != NULL; item = g_slist_next (item)) {
@@ -785,47 +866,40 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 		return_unlock(-ENOENT);
     }
 
-    if (path != NULL && strcmp (path, "/") == 0) {
+    int item_id = -1;
+    check_folders();
+    item_id = lookup_folder_id (storageArea[storageid].folders, (gchar *) path, NULL);
+    if (item_id >= 0) {
+        // Must be a folder
+        stbuf->st_ino = item_id;
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
     } else {
-        int item_id = -1;
-        LIBMTP_folder_t *folder;
-        check_folders();
-        folder = folders;
-        item_id = lookup_folder_id (folder, (gchar *) path, "");
-        if (item_id >= 0) {
-            // Must be a folder
-            stbuf->st_ino = item_id;
-            stbuf->st_mode = S_IFDIR | 0777;
-            stbuf->st_nlink = 2;
-        } else {
-            // Must be a file
-            item_id = parse_path (path);
-            LIBMTP_file_t *file;
-            DBG("%d:%s", item_id, path);
-            check_files();
-            file = files;
-            gboolean found = FALSE;
-            while (file != NULL) {
-                if (file->item_id == item_id) {
-                    stbuf->st_ino = item_id;
-                    stbuf->st_size = file->filesize;
-                    stbuf->st_blocks = (file->filesize / 512) +
-                        (file->filesize % 512 > 0 ? 1 : 0);
-                    stbuf->st_nlink = 1;
-                    stbuf->st_mode = S_IFREG | 0777;
-                    DBG("time:%s",ctime(&(file->modificationdate)));
-                    stbuf->st_mtime = file->modificationdate;
-                    stbuf->st_ctime = file->modificationdate;
-                    stbuf->st_atime = file->modificationdate;
-                    found = TRUE;
-                }
-                file = file->next;
+        // Must be a file
+        item_id = parse_path (path);
+        LIBMTP_file_t *file;
+        DBG("id:path=%d:%s", item_id, path);
+        check_files();
+        file = files;
+        gboolean found = FALSE;
+        while (file != NULL) {
+            if (file->item_id == item_id) {
+                stbuf->st_ino = item_id;
+                stbuf->st_size = file->filesize;
+                stbuf->st_blocks = (file->filesize / 512) +
+                    (file->filesize % 512 > 0 ? 1 : 0);
+                stbuf->st_nlink = 1;
+                stbuf->st_mode = S_IFREG | 0777;
+                DBG("time:%s",ctime(&(file->modificationdate)));
+                stbuf->st_mtime = file->modificationdate;
+                stbuf->st_ctime = file->modificationdate;
+                stbuf->st_atime = file->modificationdate;
+                found = TRUE;
             }
-            if (!found) {
-                ret = -ENOENT;
-            }
+            file = file->next;
+        }
+        if (!found) {
+            ret = -ENOENT;
         }
     }
 
@@ -871,6 +945,8 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
         DBG("rdwrite");
     }
 
+    int storageid;
+    storageid=find_storage(path);
     FILE *filetmp = tmpfile ();
     int tmpfile = fileno (filetmp);
     if (tmpfile != -1) {
@@ -902,7 +978,7 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
                             int parent_id = file->parent_id;
                             while (parent_id != 0) {
                                 check_folders();
-                                folder = LIBMTP_Find_Folder(folders,parent_id);
+                                folder = LIBMTP_Find_Folder(storageArea[storageid].folders,parent_id);
                                 path = strcat(path,folder->name);
                                 path = strcat(path,"/");
                                 parent_id = folder->parent_id;
@@ -1001,6 +1077,7 @@ mtpfs_mkdir_real (const char *path, mode_t mode)
     GSList *item;
     item = g_slist_find_custom (myfiles, path, (GCompareFunc) strcmp);
     int item_id = parse_path (path);
+    int storageid = find_storage(path);
     if ((item == NULL) && (item_id < 0)) {
         // Split path and find parent_id
         gchar *filename = g_strdup("");
@@ -1017,7 +1094,7 @@ mtpfs_mkdir_real (const char *path, mode_t mode)
                 if (fields[i + 1] == NULL) {
                     gchar *tmp = g_strndup (directory, strlen (directory) - 1);
                     check_folders();
-                    parent_id = lookup_folder_id (folders, tmp, "");
+                    parent_id = lookup_folder_id (storageArea[storageid].folders, tmp, NULL);
 					g_free (tmp);
                     if (parent_id < 0)
                         parent_id = 0;
@@ -1037,7 +1114,7 @@ mtpfs_mkdir_real (const char *path, mode_t mode)
         if (ret == 0) {
             ret = -EEXIST;
         } else {
-            folders_changed=TRUE;
+            storageArea[storageid].folders_changed=TRUE;
             ret = 0;
         }
     } else {
@@ -1062,15 +1139,17 @@ mtpfs_rmdir (const char *path)
     enter_lock("rmdir %s", path);
     int ret = 0;
     int folder_id = -1;
-    if (strcmp (path, "/") != 0) {
-        folder_id = lookup_folder_id (folders, (gchar *) path, "");
+    if (strcmp (path, "/") == 0) {
+        return_unlock(0);
     }
+    int storageid=find_storage(path);
+    folder_id = lookup_folder_id (storageArea[storageid].folders, (gchar *) path, NULL);
     if (folder_id < 0)
         return_unlock(-ENOENT);
     
     LIBMTP_Delete_Object(device, folder_id);
 
-    folders_changed=TRUE;
+    storageArea[storageid].folders_changed=TRUE;
     return_unlock(ret);
 }
 
@@ -1093,7 +1172,7 @@ mtpfs_rename (const char *oldname, const char *newname)
         if (strlen (fields[i]) > 0) {
             if (fields[i + 1] == NULL) {
                 directory = g_strndup (directory, strlen (directory) - 1);
-                parent_id = lookup_folder_id (folders, directory, "");
+                parent_id = lookup_folder_id (folders, directory, NULL);
                 if (parent_id < 0)
                     parent_id = 0;
                 filename = g_strdup (fields[i]);
@@ -1125,14 +1204,16 @@ mtpfs_rename (const char *oldname, const char *newname)
     LIBMTP_folder_t *folder;
     LIBMTP_file_t *file;
 	
+    int storageid_old=find_storage(oldname);
+    int storageid_new=find_storage(newname);
     if (strcmp (oldname, "/") != 0) {
-        folder_id = lookup_folder_id (folders, (gchar *) oldname, "");
+        folder_id = lookup_folder_id (storageArea[storageid_old].folders, (gchar *) oldname, NULL);
     }
     if (folder_id < 0)
         return_unlock(-ENOENT);
 
     check_folders();
-    folder = LIBMTP_Find_Folder (folders, folder_id);
+    folder = LIBMTP_Find_Folder (storageArea[storageid_old].folders, folder_id);
 
     /* MTP Folder object not found? */
     if (folder == NULL)
@@ -1176,9 +1257,9 @@ mtpfs_rename (const char *oldname, const char *newname)
 				DBG("removing folder %s, id %d", oldname, folder_id);
 
 				ret = mtpfs_mkdir_real (newname, stbuf.st_mode);
-				folders_changed=TRUE;
 				LIBMTP_Delete_Object(device, folder_id);
-				folders_changed=TRUE;
+				storageArea[storageid_old].folders_changed=TRUE;
+				storageArea[storageid_new].folders_changed=TRUE;
 			}
 		}
     }
@@ -1202,16 +1283,8 @@ mtpfs_init ()
 {
     LIBMTP_devicestorage_t *storage;
     DBG("mtpfs_init");
-    LIBMTP_Get_Storage(device, LIBMTP_STORAGE_SORTBY_NOTSORTED);
     files_changed=TRUE;
-    folders_changed=TRUE;
     playlists_changed=TRUE;
-    //DBG("Get Folder List");
-    //folders = LIBMTP_Get_Folder_List_For_Storage (device,storage->id);
-    //DBG("Get File List");
-    //files = LIBMTP_Get_Filelisting_With_Callback (device, NULL, NULL);
-    //DBG("Get Playlists");
-    //playlists = LIBMTP_Get_Playlist_List(device);
     DBG("Ready");
     return 0;
 }
@@ -1238,67 +1311,111 @@ main (int argc, char *argv[])
 {
     int fuse_stat;
     umask (0);
+    LIBMTP_raw_device_t * rawdevices;
+    int numrawdevices;
+    LIBMTP_error_number_t err;
+    int i;
+
+    int opt;
+    extern int optind;
+    extern char *optarg;
+
+    //while ((opt = getopt(argc, argv, "d")) != -1 ) {
+        //switch (opt) {
+        //case 'd':
+            ////LIBMTP_Set_Debug(9);
+            //break;
+        //}
+    //}
+
+    //argc -= optind;
+    //argv += optind;
+    
     LIBMTP_Init ();
-    //device = LIBMTP_Get_First_Device ();
-    LIBMTP_mtpdevice_t *device_list, *iter;
-    switch(LIBMTP_Get_Connected_Devices(&device_list))
-    {
+
+    fprintf(stdout, "Listing raw device(s)\n");
+    err = LIBMTP_Detect_Raw_Devices(&rawdevices, &numrawdevices);
+    switch(err) {
     case LIBMTP_ERROR_NO_DEVICE_ATTACHED:
-        fprintf(stdout, "mtpfs: No Devices have been found\n");
+        fprintf(stdout, "   No raw devices found.\n");
         return 0;
     case LIBMTP_ERROR_CONNECTING:
-        fprintf(stderr, "mtpfs: There has been an error connecting. Exit\n");
+        fprintf(stderr, "Detect: There has been an error connecting. Exiting\n");
         return 1;
     case LIBMTP_ERROR_MEMORY_ALLOCATION:
-        fprintf(stderr, "mtpfs: Memory Allocation Error. Exit\n");
+        fprintf(stderr, "Detect: Encountered a Memory Allocation Error. Exiting\n");
         return 1;
+    case LIBMTP_ERROR_NONE:
+        {
+            int i;
 
-    /* Unknown general errors - This should never execute */
+            fprintf(stdout, "   Found %d device(s):\n", numrawdevices);
+            for (i = 0; i < numrawdevices; i++) {
+                if (rawdevices[i].device_entry.vendor != NULL ||
+                    rawdevices[i].device_entry.product != NULL) {
+                    fprintf(stdout, "   %s: %s (%04x:%04x) @ bus %d, dev %d\n",
+                      rawdevices[i].device_entry.vendor,
+                      rawdevices[i].device_entry.product,
+                      rawdevices[i].device_entry.vendor_id,
+                      rawdevices[i].device_entry.product_id,
+                      rawdevices[i].bus_location,
+                      rawdevices[i].devnum);
+                } else {
+                    fprintf(stdout, "   %04x:%04x @ bus %d, dev %d\n",
+                      rawdevices[i].device_entry.vendor_id,
+                      rawdevices[i].device_entry.product_id,
+                      rawdevices[i].bus_location,
+                      rawdevices[i].devnum);
+                }
+            }
+        }
+        break;
     case LIBMTP_ERROR_GENERAL:
     default:
-        fprintf(stderr, "mtpfs: Unknown error, please report "
-                        "this to the libmtp developers\n");
-    return 1;
-
-    /* Successfully connected at least one device, so continue */
-    case LIBMTP_ERROR_NONE:
-        fprintf(stdout, "mtpfs: Successfully connected\n");
-        fflush(stdout);
+        fprintf(stderr, "Unknown connection error.\n");
+        return 1;
     }
 
-    /* iterate through connected MTP devices */
-    for(iter = device_list; iter != NULL; iter = iter->next) {
-        char *friendlyname;
-        /* Echo the friendly name so we know which device we are working with */
-        friendlyname = LIBMTP_Get_Friendlyname(iter);
-        if (friendlyname == NULL) {
-            printf("Listing File Information on Device with name: (NULL)\n");
-        } else {
-            printf("Listing File Information on Device with name: %s\n", friendlyname);
-            g_free(friendlyname);
-        }
+    fprintf(stdout, "Attempting to connect device\n");
+    device = LIBMTP_Open_Raw_Device(&rawdevices[i]);
+    if (device == NULL) {
+        fprintf(stderr, "Unable to open raw device %d\n", i);
+        return 1;
     }
 
-    device = device_list;
+    LIBMTP_Dump_Errorstack(device);
+    LIBMTP_Clear_Errorstack(device);
+
+    char *friendlyname;
+    /* Echo the friendly name so we know which device we are working with */
+    friendlyname = LIBMTP_Get_Friendlyname(device);
+    if (friendlyname == NULL) {
+        printf("Listing File Information on Device with name: (NULL)\n");
+    } else {
+        printf("Listing File Information on Device with name: %s\n", friendlyname);
+        g_free(friendlyname);
+    }
+
     /* Get all storages for this device */
     int ret = LIBMTP_Get_Storage(device, LIBMTP_STORAGE_SORTBY_NOTSORTED);
     if (ret != 0) {
         fprintf(stdout,"LIBMTP_Get_Storage() failed:%d\n",ret);
         LIBMTP_Dump_Errorstack(device);
         LIBMTP_Clear_Errorstack(device);
+        return 1;
     }
 
     /* Check if multiple storage areas */
-    if (device->storage->next != 0) {
-        DBG("Multiple storage areas found");
-        LIBMTP_devicestorage_t *storage;
-        for (storage = device->storage; storage != 0; storage = storage->next)  {
-            storage_areas = g_slist_append(storage_areas, storage->StorageDescription);
-            DBG("Area: %s", storage->StorageDescription);
-        }
+    LIBMTP_devicestorage_t *storage;
+    i=0;
+    for (storage = device->storage; storage != 0; storage = storage->next)  {
+        storageArea[i].storage=storage;
+        storageArea[i].folders=NULL;
+        storageArea[i].folders_changed=TRUE;
+        DBG("Storage%d: %d - %s\n",i, storage->id, storage->StorageDescription);
+        i++;
     }
 
-    g_mutex_init (device_lock);
     DBG("Start fuse");
 
     fuse_stat=fuse_main (argc, argv, &mtpfs_oper);

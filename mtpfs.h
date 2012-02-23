@@ -30,6 +30,13 @@
 #include "id3read.h"
 #endif
 
+typedef struct
+{
+    LIBMTP_devicestorage_t *storage;
+    LIBMTP_folder_t *folders;
+    gboolean folders_changed;
+} StorageArea;
+
 /* Function declarations */
 
 /* local functions */
@@ -37,6 +44,9 @@ static LIBMTP_filetype_t find_filetype (const gchar * filename);
 static int lookup_folder_id (LIBMTP_folder_t * folderlist, gchar * path, gchar * parent);
 static int parse_path (const gchar * path);
 static void check_lost_files ();
+void check_folders ();
+static int find_storage(const gchar * path);
+
 
     /* fuse functions */
 static void * mtpfs_init (void);
@@ -54,17 +64,15 @@ static int mtpfs_rmdir (const char *path);
 static int mtpfs_statfs (const char *path, struct statfs *stbuf);
 int calc_length(int f);
 
-
 static LIBMTP_mtpdevice_t *device;
-static LIBMTP_folder_t *folders = NULL;
+static StorageArea storageArea[4];
 static LIBMTP_file_t *files = NULL;
-static LIBMTP_playlist_t *playlists = NULL;
-static GSList *myfiles = NULL;
+static gboolean files_changed = TRUE;
 static GSList *lostfiles = NULL;
-static GSList *storage_areas = NULL;
-static gboolean files_changed = FALSE;
-static gboolean folders_changed = FALSE;
+static GSList *myfiles = NULL;
+static LIBMTP_playlist_t *playlists = NULL;
 static gboolean playlists_changed = FALSE;
-static GMutex *device_lock = NULL;
+static GStaticMutex device_lock = G_STATIC_MUTEX_INIT;
+
 
 #endif /* _MTPFS_H_ */
