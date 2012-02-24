@@ -50,6 +50,7 @@ static int find_storage(const gchar * path);
 
     /* fuse functions */
 static void * mtpfs_init (void);
+static int mtpfs_blank ();
 static int mtpfs_release (const char *path, struct fuse_file_info *fi);
 void mtpfs_destroy ();
 static int mtpfs_readdir (const gchar * path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);

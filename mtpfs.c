@@ -12,7 +12,6 @@
 //#if DEBUG
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
-//#define DBG(a...) g_debug ( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a);
 #define DBG(a...) {g_printf( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a );g_printf("\n");}
 //#else
 //#define DBG(a...)
@@ -294,8 +293,8 @@ find_filetype (const gchar * filename)
     } else if (!g_ascii_strncasecmp (ptype, "jpx",3)) {
         filetype = LIBMTP_FILETYPE_JPX;
     } else {
-        g_warning("Sorry, file type \"%s\" is not yet supported\n", ptype);
-        g_warning("Tagging as unknown file type.\n");
+        DBG("Sorry, file type \"%s\" is not yet supported", ptype);
+        DBG("Tagging as unknown file type.");
         filetype = LIBMTP_FILETYPE_UNKNOWN;
     }
 	g_free (ptype);
@@ -542,7 +541,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
                 genfile->date = getYear (tag);
                 genfile->usecount = 0;
                 genfile->parent_id = (uint32_t) parent_id;
-                genfile->storage_id = storageid;
+                genfile->storage_id = storageArea[storageid].storage->id;
 
                 /* If there is a songlength tag it will take
                  * precedence over any length calculated from
@@ -602,8 +601,11 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
             #ifdef USEMAD
             }
             #endif
-            if (ret == 0)
+            if (ret == 0) {
                 DBG("Sent %s",path);
+            } else {
+                DBG("Problem sending %s - %d",path,ret);
+            }
             // Cleanup
 			if (item && item->data)
 				g_free (item->data);
@@ -618,7 +620,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
         }
     }
     close (fi->fh);
-    return_unlock();
+    return_unlock(0);
 }
 
 void
@@ -906,6 +908,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 
     return ret;
 }
+
 static int
 mtpfs_getattr (const gchar * path, struct stat *stbuf)
 {
@@ -1290,7 +1293,14 @@ mtpfs_init ()
     return 0;
 }
 
+int
+mtpfs_blank()
+{
+    // Do nothing
+}
+
 static struct fuse_operations mtpfs_oper = {
+    .chmod   = mtpfs_blank,
     .release = mtpfs_release,
     .readdir = mtpfs_readdir,
     .getattr = mtpfs_getattr,
