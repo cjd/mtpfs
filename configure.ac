@@ -4,13 +4,11 @@ AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_INSTALL
 
-PKG_CHECK_MODULES(FUSE, fuse >= 2.2 \
-                        glib-2.0 >= 2.6 \
-                        gthread-2.0 >= 1.2)
+PKG_CHECK_MODULES(FUSE, fuse >= 2.2)
 AC_SUBST(FUSE_CFLAGS)
 AC_SUBST(FUSE_LIBS)
 
-PKG_CHECK_MODULES(MTP, libmtp >= 0.0.9)
+PKG_CHECK_MODULES(MTP, libmtp >= 1.1.0)
 AC_SUBST(MTP_CFLAGS)
 AC_SUBST(MTP_LIBS)
 

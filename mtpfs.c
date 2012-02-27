@@ -8,14 +8,13 @@
 
 #include <mtpfs.h>
 
-//#define DEBUG 1
-//#if DEBUG
+#if DEBUG
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
 #define DBG(a...) {g_printf( "[" __FILE__ ":" TOSTRING(__LINE__) "] " a );g_printf("\n");}
-//#else
-//#define DBG(a...)
-//#endif
+#else
+#define DBG(a...)
+#endif
 
 #if DEBUG
 static void dump_mtp_error()

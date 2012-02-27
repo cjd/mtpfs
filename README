@@ -8,8 +8,8 @@ Requirements
 ------------
 
 FUSE >= 2.2
-GLib >= 2.6
-libmtp >= 0.0.9
+GLib >= 2.30
+libmtp >= 1.1.2
 
 How to mount a filesystem
 -------------------------
