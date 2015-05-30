@@ -7,6 +7,8 @@
 */
 
 #include <mtpfs.h>
+#include <glib/gprintf.h>
+#include <stdlib.h> /* strtoul() */
 
 #if DEBUG
 #define STRINGIFY(x) #x

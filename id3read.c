@@ -19,6 +19,7 @@ Boston, MA 02111-1307, USA.
 #define ID3V2_MAX_STRING_LEN 4096
 #include <id3tag.h>
 #include <libmtp.h>
+#include <stdlib.h> /* atol() */
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
