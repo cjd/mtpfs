@@ -7,6 +7,8 @@
 */
 
 #include <mtpfs.h>
+#include <glib/gprintf.h>
+#include <stdlib.h> /* strtoul() */
 
 #if DEBUG
 #define STRINGIFY(x) #x
@@ -773,7 +775,7 @@ static int
 mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 {
     int ret = 0;
-    if (path==NULL) return_unlock(-ENOENT);
+    if (path==NULL) return -ENOENT;
     memset (stbuf, 0, sizeof (struct stat));
 
     // Set uid/gid of file
@@ -784,7 +786,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     if (strcmp (path, "/") == 0) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
-        return_unlock(0);
+        return 0;
     }
 
     // Check cached files first (stuff that hasn't been written to dev yet)
@@ -796,7 +798,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
             stbuf->st_size = 0;
             stbuf->st_blocks = 2;
             stbuf->st_mtime = time(NULL);
-            return_unlock(0);
+            return 0;
         }
     }
 
@@ -805,7 +807,7 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
     if (g_strrstr(path+1,"/") == NULL) {
         stbuf->st_mode = S_IFDIR | 0777;
         stbuf->st_nlink = 2;
-        return_unlock(0);
+        return 0;
     }
 
     int storageid;
@@ -840,11 +842,11 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
                 stbuf->st_size = filesize;
                 stbuf->st_blocks = 2;
                 stbuf->st_mtime = time(NULL);
-                return_unlock(0);
+                return 0;
             }
             playlist = playlist->next;   
         }
-        return_unlock(-ENOENT);
+        return -ENOENT;
     }
 
     if (strncasecmp (path, "/lost+found",11) == 0) {
@@ -861,11 +863,11 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 				stbuf->st_nlink = 1;
 				stbuf->st_mode = S_IFREG | 0777;
                 stbuf->st_mtime = file->modificationdate;
-				return_unlock(0);
+				return 0;
 			}
 		}
 
-		return_unlock(-ENOENT);
+		return -ENOENT;
     }
 
     int item_id = -1;
