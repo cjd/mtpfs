@@ -1326,7 +1326,7 @@ main (int argc, char *argv[])
     LIBMTP_raw_device_t * rawdevices;
     int numrawdevices;
     LIBMTP_error_number_t err;
-    int i;
+    int i = 0;
 
     int opt;
     extern int optind;
