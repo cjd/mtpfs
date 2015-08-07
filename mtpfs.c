@@ -1326,7 +1326,7 @@ main (int argc, char *argv[])
     LIBMTP_raw_device_t * rawdevices;
     int numrawdevices;
     LIBMTP_error_number_t err;
-    int i;
+    int device_number = 0;
 
     int opt;
     extern int optind;
@@ -1389,9 +1389,9 @@ main (int argc, char *argv[])
     }
 
     fprintf(stdout, "Attempting to connect device\n");
-    device = LIBMTP_Open_Raw_Device(&rawdevices[i]);
+    device = LIBMTP_Open_Raw_Device(&rawdevices[device_number]);
     if (device == NULL) {
-        fprintf(stderr, "Unable to open raw device %d\n", i);
+        fprintf(stderr, "Unable to open raw device %d\n", device_number);
         return 1;
     }
 
@@ -1419,13 +1419,12 @@ main (int argc, char *argv[])
 
     /* Check if multiple storage areas */
     LIBMTP_devicestorage_t *storage;
-    i=0;
-    for (storage = device->storage; storage != 0; storage = storage->next)  {
+    int i;
+    for (storage = device->storage, i = 0; storage != 0; storage = storage->next, i++)  {
         storageArea[i].storage=storage;
         storageArea[i].folders=NULL;
         storageArea[i].folders_changed=TRUE;
         DBG("Storage%d: %d - %s\n",i, storage->id, storage->StorageDescription);
-        i++;
     }
 
     DBG("Start fuse");
