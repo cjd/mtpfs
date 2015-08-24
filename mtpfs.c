@@ -1681,6 +1681,7 @@ main (int argc, char *argv[])
 
   fprintf (stdout, "Attempting to connect device\n");
   device = LIBMTP_Open_Raw_Device (&rawdevices[i]);
+  free (rawdevices);
   if (device == NULL)
     {
       fprintf (stderr, "Unable to open raw device %d\n", i);
