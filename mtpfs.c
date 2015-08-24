@@ -1171,17 +1171,19 @@ mtpfs_open (const gchar * path, struct fuse_file_info *fi)
   if (item_id < 0)
     return_unlock (-ENOENT);
 
-  if (fi->flags == O_RDONLY)
+  switch (fi->flags & O_ACCMODE)
     {
+    case O_RDONLY:
       DBG ("read");
-    }
-  else if (fi->flags == O_WRONLY)
-    {
+      break;
+    case O_WRONLY:
       DBG ("write");
-    }
-  else if (fi->flags == O_RDWR)
-    {
+      break;
+    case O_RDWR:
       DBG ("rdwrite");
+      break;
+    default:
+      DBG ("unexpected access mode: %d", fi->flags & O_ACCMODE);
     }
 
   int storageid;
