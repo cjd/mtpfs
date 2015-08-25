@@ -658,7 +658,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
 	  int i;
 	  int parent_id = 0;
 	  int storageid;
-	  storageid = find_storage (fields[0]);
+	  storageid = find_storage (path);
 	  if (storageid < 0)
 	    {
 	      return_unlock (-ENOENT);
