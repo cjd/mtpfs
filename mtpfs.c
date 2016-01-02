@@ -1068,7 +1068,13 @@ mtpfs_getattr_real (const gchar * path, struct stat *stbuf)
 			  check_folders ();
 			  folder =
 			    LIBMTP_Find_Folder
-			    (storageArea[i].folders, parent_id);
+			    (storageArea[storageid].folders, parent_id);
+			  if (folder == NULL)
+			    {
+			      DBG ("could not find %d in storage-area %d",
+				   parent_id, storageid);
+			      return -ENOENT;
+			    }
 			  parent_id = folder->parent_id;
 			  filesize = filesize + strlen (folder->name) + 1;
 			}
