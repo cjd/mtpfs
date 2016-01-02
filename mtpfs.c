@@ -29,8 +29,8 @@ dump_mtp_error ()
 #define dump_mtp_error()
 #endif
 
-#define enter_lock(a...)       do { DBG("lock"); DBG(a); g_static_mutex_lock(&device_lock); } while(0)
-#define return_unlock(a)       do { DBG("return unlock"); g_static_mutex_unlock(&device_lock); return a; } while(0)
+#define enter_lock(a...)       do { DBG("lock"); DBG(a); g_mutex_lock(&device_lock); } while(0)
+#define return_unlock(a)       do { DBG("return unlock"); g_mutex_unlock(&device_lock); return a; } while(0)
 
 void
 free_files (LIBMTP_file_t * filelist)
