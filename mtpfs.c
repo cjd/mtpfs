@@ -1650,34 +1650,33 @@ static struct fuse_operations mtpfs_oper = {
 int
 main (int argc, char *argv[])
 {
-  int fuse_stat;
-  umask (0);
-  LIBMTP_raw_device_t *rawdevices;
-  int numrawdevices;
-  LIBMTP_error_number_t err;
-  int i;
+    int fuse_stat;
+    umask (0);
+    LIBMTP_raw_device_t * rawdevices;
+    int numrawdevices;
+    LIBMTP_error_number_t err;
+    int device_number = 0;
 
-  int opt;
-  extern int optind;
-  extern char *optarg;
+    int opt;
+    extern int optind;
+    extern char *optarg;
 
-  //while ((opt = getopt(argc, argv, "d")) != -1 ) {
-  //switch (opt) {
-  //case 'd':
-  ////LIBMTP_Set_Debug(9);
-  //break;
-  //}
-  //}
+    //while ((opt = getopt(argc, argv, "d")) != -1 ) {
+        //switch (opt) {
+        //case 'd':
+            ////LIBMTP_Set_Debug(9);
+            //break;
+        //}
+    //}
 
-  //argc -= optind;
-  //argv += optind;
+    //argc -= optind;
+    //argv += optind;
+    
+    LIBMTP_Init ();
 
-  LIBMTP_Init ();
-
-  fprintf (stdout, "Listing raw device(s)\n");
-  err = LIBMTP_Detect_Raw_Devices (&rawdevices, &numrawdevices);
-  switch (err)
-    {
+    fprintf(stdout, "Listing raw device(s)\n");
+    err = LIBMTP_Detect_Raw_Devices(&rawdevices, &numrawdevices);
+    switch(err) {
     case LIBMTP_ERROR_NO_DEVICE_ATTACHED:
       fprintf (stdout, "   No raw devices found.\n");
       return 0;
@@ -1724,13 +1723,11 @@ main (int argc, char *argv[])
       return 1;
     }
 
-  fprintf (stdout, "Attempting to connect device\n");
-  device = LIBMTP_Open_Raw_Device (&rawdevices[i]);
-  free (rawdevices);
-  if (device == NULL)
-    {
-      fprintf (stderr, "Unable to open raw device %d\n", i);
-      return 1;
+    fprintf(stdout, "Attempting to connect device\n");
+    device = LIBMTP_Open_Raw_Device(&rawdevices[device_number]);
+    if (device == NULL) {
+        fprintf(stderr, "Unable to open raw device %d\n", device_number);
+        return 1;
     }
 
   LIBMTP_Dump_Errorstack (device);
@@ -1760,17 +1757,14 @@ main (int argc, char *argv[])
       return 1;
     }
 
-  /* Check if multiple storage areas */
-  LIBMTP_devicestorage_t *storage;
-  i = 0;
-  for (storage = device->storage; storage != 0; storage = storage->next)
-    {
-      storageArea[i].storage = storage;
-      storageArea[i].folders = NULL;
-      storageArea[i].folders_changed = TRUE;
-      DBG ("Storage%d: %d - %s\n", i, storage->id,
-	   storage->StorageDescription);
-      i++;
+    /* Check if multiple storage areas */
+    LIBMTP_devicestorage_t *storage;
+    int i;
+    for (storage = device->storage, i = 0; storage != 0; storage = storage->next, i++)  {
+        storageArea[i].storage=storage;
+        storageArea[i].folders=NULL;
+        storageArea[i].folders_changed=TRUE;
+        DBG("Storage%d: %d - %s\n",i, storage->id, storage->StorageDescription);
     }
 
   DBG ("Start fuse");
