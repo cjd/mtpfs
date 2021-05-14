@@ -76,6 +76,6 @@ static GSList *lostfiles = NULL;
 static GSList *myfiles = NULL;
 static LIBMTP_playlist_t *playlists = NULL;
 static gboolean playlists_changed = FALSE;
-static GMutex device_lock = G_STATIC_MUTEX_INIT;
+static GMutex device_lock;
 
 #endif /* _MTPFS_H_ */

@@ -1661,6 +1661,8 @@ main (int argc, char *argv[])
   extern int optind;
   extern char *optarg;
 
+  g_mutex_init(&device_lock);
+
   //while ((opt = getopt(argc, argv, "d")) != -1 ) {
   //switch (opt) {
   //case 'd':
