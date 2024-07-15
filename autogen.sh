@@ -1,4 +1,4 @@
 aclocal
 autoconf
 automake -a
-./configure --enable-debug
+#./configure --enable-debug
