@@ -1625,6 +1625,7 @@ int
 mtpfs_blank ()
 {
   // Do nothing
+  return 0;
 }
 
 static struct fuse_operations mtpfs_oper = {
