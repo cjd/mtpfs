@@ -812,7 +812,7 @@ mtpfs_release (const char *path, struct fuse_file_info *fi)
 }
 
 void
-mtpfs_destroy ()
+mtpfs_destroy (void *buf)
 {
   enter_lock ("destroy");
   if (files)
@@ -1622,7 +1622,7 @@ mtpfs_init ()
 }
 
 int
-mtpfs_blank ()
+mtpfs_blank (const char *path, mode_t mode)
 {
   // Do nothing
 }
