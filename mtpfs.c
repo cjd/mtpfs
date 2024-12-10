@@ -1625,6 +1625,7 @@ int
 mtpfs_blank (const char *path, mode_t mode)
 {
   // Do nothing
+  return 0;
 }
 
 static struct fuse_operations mtpfs_oper = {
